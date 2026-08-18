@@ -12,10 +12,14 @@
     <string name="edit">Editar</string>
     <string name="add">Añadir</string>
     <string name="search">Buscar</string>
+    <string name="search_hint">Buscar canales…</string>
+    <string name="no_results">No se encontraron resultados</string>
     <string name="settings">Configuración</string>
     <string name="favorites">Favoritos</string>
     <string name="history">Historial</string>
     <string name="categories">Categorías</string>
+    <string name="channels">canales</string>
+    <string name="back">Atrás</string>
     <string name="live_tv">TV en Vivo</string>
     <string name="vod">Películas / Series</string>
     <string name="series">Series</string>
@@ -57,6 +61,44 @@
     <string name="clear_cache">Limpiar caché</string>
     <string name="about">Acerca de</string>
     <string name="version">Versión 1.0.0</string>
+
+    <!-- Settings Sections -->
+    <string name="section_general">General</string>
+    <string name="section_player">Reproductor</string>
+    <string name="section_parental">Control Parental</string>
+    <string name="section_sync">Sincronización</string>
+    <string name="section_data">Datos y Privacidad</string>
+
+    <!-- General Settings -->
+    <string name="theme">Tema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Oscuro</string>
+
+    <!-- Player Settings -->
+    <string name="buffer_size">Tamaño del buffer</string>
+    <string name="hardware_decoding">Decodificación por hardware</string>
+    <string name="enabled">Activado</string>
+    <string name="disabled">Desactivado</string>
+
+    <!-- Parental Settings -->
+    <string name="change_pin">Cambiar PIN</string>
+    <string name="pin_required">PIN requerido</string>
+
+    <!-- Sync Settings -->
+    <string name="auto_sync">Sincronización automática</string>
+    <string name="sync_frequency">Frecuencia de sincronización</string>
+    <string name="sync_now">Sincronizar ahora</string>
+    <string name="manual_sync">Sincronización manual</string>
+
+    <!-- Data Settings -->
+    <string name="free_space">Liberar espacio</string>
+    <string name="export_settings">Exportar configuración</string>
+    <string name="backup_settings">Respaldo de ajustes</string>
+    <string name="import_settings">Importar configuración</string>
+    <string name="restore_settings">Restaurar ajustes</string>
+    <string name="reset_app">Restablecer aplicación</string>
+    <string name="factory_reset">Volver a estado de fábrica</string>
 
     <!-- Parental Control -->
     <string name="set_pin">Establecer PIN</string>

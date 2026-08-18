@@ -11,6 +11,68 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 
+class Converters {
+    @TypeConverter
+    fun stringToList(value: String?): List<String> {
+        return value?.let { Json.Default.decodeFromString(it) } ?: emptyList()
+    }
+
+    @TypeConverter
+    fun listToString(value: List<String>): String {
+        return Json.Default.encodeToString(value)
+    }
+
+    @TypeConverter
+    fun stringToMap(value: String?): Map<String, String> {
+        return value?.let { Json.Default.decodeFromString(it) } ?: emptyMap()
+    }
+
+    @TypeConverter
+    fun mapToString(value: Map<String, String>): String {
+        return Json.Default.encodeToString(value)
+    }
+
+    @TypeConverter
+    fun stringToXtreamConfig(value: String?): Playlist.XtreamConfig? {
+        return value?.let { Json.Default.decodeFromString(it) }
+    }
+
+    @TypeConverter
+    fun xtreamConfigToString(value: Playlist.XtreamConfig?): String? {
+        return value?.let { Json.Default.encodeToString(it) }
+    }
+
+    @TypeConverter
+    fun stringToHttpOptions(value: String?): Channel.HttpOptions? {
+        return value?.let { Json.Default.decodeFromString(it) }
+    }
+
+    @TypeConverter
+    fun httpOptionsToString(value: Channel.HttpOptions?): String? {
+        return value?.let { Json.Default.encodeToString(it) }
+    }
+
+    @TypeConverter
+    fun intToPlaylistSource(value: Int): Playlist.PlaylistSource {
+        return Playlist.PlaylistSource.values()[value]
+    }
+
+    @TypeConverter
+    fun playlistSourceToInt(value: Playlist.PlaylistSource): Int {
+        return value.ordinal
+    }
+
+    @TypeConverter
+    fun intToStreamFormat(value: Int): Channel.StreamFormat {
+        return Channel.StreamFormat.values()[value]
+    }
+
+    @TypeConverter
+    fun streamFormatToInt(value: Channel.StreamFormat): Int {
+        return value.ordinal
+    }
+}
+
 @Entity(tableName = "playlists")
 data class PlaylistEntity(
     @PrimaryKey val id: String,

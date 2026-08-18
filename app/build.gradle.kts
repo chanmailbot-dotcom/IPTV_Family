@@ -5,16 +5,17 @@ plugins {
     id("kotlin-kapt")
     id("kotlin-parcelize")
     id("io.gitlab.arturbosch.detekt")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.iptv.family"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.iptv.family"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
@@ -27,7 +28,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            shrinkResources = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -58,9 +59,7 @@ android {
     }
 
     packagingOptions {
-        resources {
-            excludes += "/META-INF/*"
-        }
+        exclude("/META-INF/*")
     }
 
     namespace = "com.iptv.family"
@@ -76,6 +75,9 @@ dependencies {
     // Material 3
     implementation("androidx.compose.material3:material3:1.3.0")
     implementation("androidx.compose.material3:material3-window-size-class:1.3.0")
+    
+    // Material Icons
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.08.00"))

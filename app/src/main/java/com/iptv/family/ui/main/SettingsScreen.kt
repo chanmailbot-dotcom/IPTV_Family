@@ -2,250 +2,309 @@ package com.iptv.family.ui.main
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.ParentControl
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.MagnifyingGlass
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.iptv.family.R
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    onBack: () -> Unit,
-) {
+fun SettingsScreen() {
     val context = LocalContext.current
+    val prefs: SharedPreferences = remember { context.getSharedPreferences("app_settings", Context.MODE_PRIVATE) }
 
-    // Settings state - in real app this would come from DataStore/SharedPreferences
-    var parentalControlEnabled by remember { mutableStateOf(false) }
-    var parentalPin by remember { mutableStateOf("") }
-    var autoPlayNext by remember { mutableStateOf(true) }
-    var rememberPosition by remember { mutableStateOf(true) }
-    var bufferSize by remember { mutableStateOf("large") }
-    var preferredLanguage by remember { mutableStateOf("es") }
-    var themeMode by remember { mutableStateOf("system") }
-    var syncEnabled by remember { mutableStateOf(false) }
-    var syncAccount by remember { mutableStateOf("") }
+    var themeMode by remember { mutableStateOf(prefs.getInt("theme_mode", 0)) }
+    var language by remember { mutableStateOf(prefs.getString("language", "es") ?: "es") }
+    var bufferSize by remember { mutableStateOf(prefs.getInt("buffer_size", 10)) }
+    var enableHardwareDecoding by remember { mutableStateOf(prefs.getBoolean("hw_decoding", true)) }
+    var parentalPin by remember { mutableStateOf(prefs.getString("parental_pin", "") ?: "") }
+    var parentalEnabled by remember { mutableStateOf(prefs.getBoolean("parental_enabled", false)) }
+    var autoSyncEnabled by remember { mutableStateOf(prefs.getBoolean("auto_sync", false)) }
+    var syncFrequency by remember { mutableStateOf(prefs.getInt("sync_frequency", 24)) }
 
-    val sections = remember {
-        listOf(
-            SettingsSection(
-                title = "General",
-                items = listOf(
-                    SettingItem(
-                        title = "Idioma",
-                        subtitle = "Español",
-                        icon = Icons.Default.Language,
-                        action = { /* show language picker */ }
-                    ),
-                    SettingItem(
-                        title = "Tema",
-                        subtitle = "Sistema (Oscuro)",
-                        icon = Icons.Default.Settings,
-                        action = { /* show theme picker */ }
-                    ),
-                    SettingItem(
-                        title = "Reproducción automática",
-                        subtitle = "Reproducir siguiente canal al terminar",
-                        icon = Icons.Default.VolumeUp,
-                        trailing = { Switch(checked = autoPlayNext, onCheckedChange = { autoPlayNext = it }) }
-                    ),
-                    SettingItem(
-                        title = "Recordar posición",
-                        subtitle = "Continuar desde donde te quedaste",
-                        icon = Icons.Default.Restore,
-                        trailing = { Switch(checked = rememberPosition, onCheckedChange = { rememberPosition = it }) }
-                    ),
-                    SettingItem(
-                        title = "Tamaño de buffer",
-                        subtitle = "Grande (recomendado para directo)",
-                        icon = Icons.Default.Folder,
-                        action = { /* show buffer size picker */ }
-                    ),
-                )
-            ),
-            SettingsSection(
-                title = "Reproductor",
-                items = listOf(
-                    SettingItem(
-                        title = "Controles parentales",
-                        subtitle = "Proteger contenido adulto con PIN",
-                        icon = Icons.Default.ParentControl,
-                        trailing = { Switch(checked = parentalControlEnabled, onCheckedChange = { parentalControlEnabled = it }) }
-                    ),
-                    SettingItem(
-                        title = "Cambiar PIN parental",
-                        subtitle = parentalPin.ifBlank { "No configurado" },
-                        icon = Icons.Default.Lock,
-                        action = { /* show PIN dialog */ }
-                    ),
-                )
-            ),
-            SettingsSection(
-                title = "Sincronización",
-                items = listOf(
-                    SettingItem(
-                        title = "Sincronizar ajustes",
-                        subtitle = "Guardar favoritos, listas y posición en la nube",
-                        icon = Icons.Default.CloudSync,
-                        trailing = { Switch(checked = syncEnabled, onCheckedChange = { syncEnabled = it }) }
-                    ),
-                    SettingItem(
-                        title = "Cuenta de sincronización",
-                        subtitle = syncAccount.ifBlank { "No vinculada" },
-                        icon = Icons.Default.Person,
-                        action = { /* show account picker */ }
-                    ),
-                )
-            ),
-            SettingsSection(
-                title = "Datos y privacidad",
-                items = listOf(
-                    SettingItem(
-                        title = "Borrar caché de listas",
-                        subtitle = "Liberar espacio eliminando datos temporales",
-                        icon = Icons.Default.Delete,
-                        isDestructive = true,
-                        action = { /* clear cache */ }
-                    ),
-                    SettingItem(
-                        title = "Restablecer ajustes",
-                        subtitle = "Volver a valores por defecto",
-                        icon = Icons.Default.Restore,
-                        isDestructive = true,
-                        action = { /* reset settings */ }
-                    ),
-                )
-            ),
-        )
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        TopAppBarSmall(
-            title = { Text("Configuración") },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
-                }
-            },
-        )
-
+    androidx.compose.material3.Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings)) },
+                navigationIcon = {
+                    androidx.compose.material3.IconButton(onClick = { /* navigate back */ }) {
+                        Icon(ArrowBack, contentDescription = stringResource(R.string.back))
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF1E1E1E),
+                ),
+            )
+        },
+        containerColor = Color(0xFF121212),
+    ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(paddingValues),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         ) {
-            items(sections, key = { it.title }) { section ->
-                SettingsSectionCard(section = section)
+            // General section
+            SettingsSection(
+                title = stringResource(R.string.section_general),
+                icon = Palette,
+            ) {
+                SettingsItem(
+                    title = stringResource(R.string.theme),
+                    subtitle = when (themeMode) {
+                        0 -> stringResource(R.string.theme_system)
+                        1 -> stringResource(R.string.theme_light)
+                        2 -> stringResource(R.string.theme_dark)
+                        else -> stringResource(R.string.theme_system)
+                    },
+                    icon = Palette,
+                    onClick = { /* show theme dialog */ }
+                )
+                SettingsItem(
+                    title = stringResource(R.string.language),
+                    subtitle = when (language) {
+                        "es" -> "Español"
+                        "en" -> "English"
+                        else -> "Español"
+                    },
+                    icon = Language,
+                    onClick = { /* show language dialog */ }
+                )
+            }
+
+            // Player section
+            SettingsSection(
+                title = stringResource(R.string.section_player),
+                icon = VolumeUp,
+            ) {
+                SettingsItem(
+                    title = stringResource(R.string.buffer_size),
+                    subtitle = "${bufferSize} MB",
+                    icon = Folder,
+                    onClick = { /* show buffer dialog */ }
+                )
+                SettingsItem(
+                    title = stringResource(R.string.hardware_decoding),
+                    subtitle = if (enableHardwareDecoding) stringResource(R.string.enabled) else stringResource(R.string.disabled),
+                    icon = Tv,
+                    onClick = { enableHardwareDecoding = !enableHardwareDecoding },
+                    trailing = {
+                        Switch(
+                            checked = enableHardwareDecoding,
+                            onCheckedChange = { enableHardwareDecoding = it },
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    }
+                )
+            }
+
+            // Parental section
+            SettingsSection(
+                title = stringResource(R.string.section_parental),
+                icon = Security,
+            ) {
+                SettingsItem(
+                    title = stringResource(R.string.parental_control),
+                    subtitle = if (parentalEnabled) stringResource(R.string.enabled) else stringResource(R.string.disabled),
+                    icon = Lock,
+                    onClick = { parentalEnabled = !parentalEnabled },
+                    trailing = {
+                        Switch(
+                            checked = parentalEnabled,
+                            onCheckedChange = { parentalEnabled = it },
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    }
+                )
+                if (parentalEnabled) {
+                    SettingsItem(
+                        title = stringResource(R.string.change_pin),
+                        subtitle = stringResource(R.string.pin_required),
+                        icon = Lock,
+                        onClick = { /* show PIN dialog */ }
+                    )
+                }
+            }
+
+            // Sync section
+            SettingsSection(
+                title = stringResource(R.string.section_sync),
+                icon = Cloud,
+            ) {
+                SettingsItem(
+                    title = stringResource(R.string.auto_sync),
+                    subtitle = if (autoSyncEnabled) stringResource(R.string.enabled) else stringResource(R.string.disabled),
+                    icon = Cloud,
+                    onClick = { autoSyncEnabled = !autoSyncEnabled },
+                    trailing = {
+                        Switch(
+                            checked = autoSyncEnabled,
+                            onCheckedChange = { autoSyncEnabled = it },
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    }
+                )
+                if (autoSyncEnabled) {
+                    SettingsItem(
+                        title = stringResource(R.string.sync_frequency),
+                        subtitle = "${syncFrequency}h",
+                        icon = Restore,
+                        onClick = { /* show frequency dialog */ }
+                    )
+                }
+                SettingsItem(
+                    title = stringResource(R.string.sync_now),
+                    subtitle = stringResource(R.string.manual_sync),
+                    icon = Restore,
+                    onClick = { /* trigger sync */ }
+                )
+            }
+
+            // Data section
+            SettingsSection(
+                title = stringResource(R.string.section_data),
+                icon = Folder,
+            ) {
+                SettingsItem(
+                    title = stringResource(R.string.clear_cache),
+                    subtitle = stringResource(R.string.free_space),
+                    icon = Folder,
+                    onClick = { /* clear cache */ }
+                )
+                SettingsItem(
+                    title = stringResource(R.string.export_settings),
+                    subtitle = stringResource(R.string.backup_settings),
+                    icon = Cloud,
+                    onClick = { /* export settings */ }
+                )
+                SettingsItem(
+                    title = stringResource(R.string.import_settings),
+                    subtitle = stringResource(R.string.restore_settings),
+                    icon = Restore,
+                    onClick = { /* import settings */ }
+                )
+                SettingsItem(
+                    title = stringResource(R.string.reset_app),
+                    subtitle = stringResource(R.string.factory_reset),
+                    icon = Security,
+                    onClick = { /* reset app */ }
+                )
             }
         }
     }
 }
 
 @Composable
-fun SettingsSectionCard(section: SettingsSection) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+private fun SettingsSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    content: @Composable () -> Unit,
+) {
+    androidx.compose.foundation.layout.Column(
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = section.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
-        )
-        Column(
+        androidx.compose.foundation.layout.Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(12.dp)),
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            section.items.forEachIndexed { index, item ->
-                SettingsItem(item = item, isLast = index == section.items.lastIndex)
-            }
+            Icon(icon, contentDescription = null, tint = Color(0xFF1E88E5), modifier = Modifier.size(24.dp))
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = Color(0xFF1E88E5),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF1E1E1E), RoundedCornerShape(12.dp))
+        ) {
+            content()
         }
     }
 }
 
 @Composable
-fun SettingsItem(
-    item: SettingItem,
-    isLast: Boolean,
+private fun SettingsItem(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null,
 ) {
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .then(if (!isLast) Modifier.background(Color.Transparent, RoundedCornerShape(0.dp)) else Modifier)
-            .clickable(enabled = item.action != null, onClick = { item.action?.invoke() }),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent,
+        ),
+        shape = RoundedCornerShape(0.dp),
     ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = null,
-            tint = if (item.isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp).padding(end = 16.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (item.isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = item.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        item.trailing?.invoke()
-        if (item.action != null && item.trailing == null) {
-            androidx.compose.material.Icon(
-                androidx.compose.material.icons.filled.ChevronRight,
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(16.dp))
+            androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                )
+                Text(
+                    text = subtitle,
+                    color = Color.Gray,
+                    fontSize = 14.sp,
+                )
+            }
+            trailing?.invoke() ?: Icon(
+                imageVector = ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = Color.Gray,
             )
         }
     }
 }
-
-data class SettingsSection(
-    val title: String,
-    val items: List<SettingItem>,
-)
-
-data class SettingItem(
-    val title: String,
-    val subtitle: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val action: (() -> Unit)? = null,
-    val trailing: (@Composable () -> Unit)? = null,
-    val isDestructive: Boolean = false,
-)

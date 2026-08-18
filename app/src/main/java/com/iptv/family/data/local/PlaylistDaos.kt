@@ -67,7 +67,7 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE isFavorite = 1 ORDER BY name ASC")
     fun getFavorites(): Flow<List<ChannelEntity>>
 
-    @Query("SELECT * FROM channels WHERE group = :groupName AND playlistId = :playlistId ORDER BY name ASC")
+    @Query("SELECT * FROM channels WHERE \"group\" = :groupName AND playlistId = :playlistId ORDER BY name ASC")
     fun getByGroup(playlistId: String, groupName: String): Flow<List<ChannelEntity>>
 
     @Query("SELECT * FROM channels WHERE name LIKE :query ORDER BY name ASC LIMIT 50")
@@ -94,19 +94,19 @@ interface CategoryDao {
     @Query("DELETE FROM categories WHERE playlistId = :playlistId")
     suspend fun deleteByPlaylistId(playlistId: String)
 
-    @Query("SELECT * FROM categories WHERE playlistId = :playlistId ORDER BY order ASC")
+    @Query("SELECT * FROM categories WHERE playlistId = :playlistId ORDER BY \"order\" ASC")
     fun getByPlaylistId(playlistId: String): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories WHERE id = :id")
     suspend fun getById(id: String): CategoryEntity?
 
-    @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND isLiveTv = 1 ORDER BY order ASC")
+    @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND isLiveTv = 1 ORDER BY \"order\" ASC")
     fun getLiveTvCategories(playlistId: String): Flow<List<CategoryEntity>>
 
-    @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND isVod = 1 ORDER BY order ASC")
+    @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND isVod = 1 ORDER BY \"order\" ASC")
     fun getVodCategories(playlistId: String): Flow<List<CategoryEntity>>
 
-    @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND isSeries = 1 ORDER BY order ASC")
+    @Query("SELECT * FROM categories WHERE playlistId = :playlistId AND isSeries = 1 ORDER BY \"order\" ASC")
     fun getSeriesCategories(playlistId: String): Flow<List<CategoryEntity>>
 }
 

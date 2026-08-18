@@ -44,16 +44,3 @@ abstract class AppDatabase : RoomDatabase() {
         }
     }
 }
-
-class Converters {
-    @TypeConverter
-    fun fromStringList(value: String?): List<String> {
-        if (value == null || value.isEmpty()) return emptyList()
-        return value.split(",").filter { it.isNotBlank() }
-    }
-
-    @TypeConverter
-    fun toStringList(list: List<String>?): String? {
-        return list?.joinToString(",")
-    }
-}

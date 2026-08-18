@@ -1,12 +1,16 @@
 package com.iptv.family.di
 
 import android.content.Context
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.iptv.family.data.local.AppDatabase
 import com.iptv.family.data.m3u.M3UParser
 import com.iptv.family.data.repository.PlaylistRepository
 import com.iptv.family.data.xtream.XtreamApiClient
+import com.iptv.family.data.xtream.XtreamApiClientFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.scopes.Singleton
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import dagger.Module
 import dagger.Provides
 import javax.inject.Inject
