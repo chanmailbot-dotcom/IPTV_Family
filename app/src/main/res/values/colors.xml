@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colores principales estilo IBO Player -->
+    <color name="primary">#1E88E5</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="primary_light">#64B5F6</color>
+    <color name="primary_container">#BBDEFB</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_primary_container">#001D3D</color>
+
+    <color name="secondary">#00ACC1</color>
+    <color name="secondary_dark">#007C91</color>
+    <color name="secondary_light">#4DD0E1</color>
+    <color name="secondary_container">#B2EBF2</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="on_secondary_container">#001F24</color>
+
+    <color name="tertiary">#D81B60</color>
+    <color name="tertiary_dark">#AD1457</color>
+    <color name="tertiary_light">#F06292</color>
+    <color name="tertiary_container">#FCE4EC</color>
+    <color name="on_tertiary">#FFFFFF</color>
+    <color name="on_tertiary_container">#42001A</color>
+
+    <!-- Superficie y fondo -->
+    <color name="surface">#121212</color>
+    <color name="surface_variant">#1E1E1E</color>
+    <color name="surface_container_low">#1A1A1A</color>
+    <color name="surface_container">#202020</color>
+    <color name="surface_container_high">#2C2C2C</color>
+    <color name="on_surface">#FFFFFF</color>
+    <color name="on_surface_variant">#B0B0B0</color>
+
+    <!-- Background -->
+    <color name="background">#0A0A0A</color>
+    <color name="on_background">#FFFFFF</color>
+
+    <!-- Error -->
+    <color name="error">#CF6679</color>
+    <color name="error_container">#932D3A</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="on_error_container">#FCDBDE</color>
+
+    <!-- Outline -->
+    <color name="outline">#7A7A7A</color>
+    <color name="outline_variant">#4A4A4A</color>
+
+    <!-- Específicos para IPTV -->
+    <color name="channel_live_indicator">#FF3B30</color>
+    <color name="channel_favorite">#FFD600</color>
+    <color name="epg_current">#1E88E5</color>
+    <color name="epg_upcoming">#7A7A7A</color>
+    <color name="category_background">#1E1E1E</color>
+    <color name="player_background">#000000</color>
+
+    <!-- Iconos -->
+    <color name="icon_tint">#FFFFFF</color>
+    <color name="icon_tint_secondary">#B0B0B0</color>
+</resources>

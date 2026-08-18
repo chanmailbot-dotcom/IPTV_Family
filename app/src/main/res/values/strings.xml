@@ -1,0 +1,67 @@
+<resources>
+    <string name="app_name">IPTV Family</string>
+
+    <!-- General -->
+    <string name="loading">Cargando…</string>
+    <string name="error">Error</string>
+    <string name="retry">Reintentar</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancelar</string>
+    <string name="save">Guardar</string>
+    <string name="delete">Eliminar</string>
+    <string name="edit">Editar</string>
+    <string name="add">Añadir</string>
+    <string name="search">Buscar</string>
+    <string name="settings">Configuración</string>
+    <string name="favorites">Favoritos</string>
+    <string name="history">Historial</string>
+    <string name="categories">Categorías</string>
+    <string name="live_tv">TV en Vivo</string>
+    <string name="vod">Películas / Series</string>
+    <string name="series">Series</string>
+
+    <!-- Playlist Management -->
+    <string name="add_playlist">Añadir lista de reproducción</string>
+    <string name="playlist_name">Nombre de la lista</string>
+    <string name="playlist_url">URL de la lista (M3U)</string>
+    <string name="xtream_url">URL del panel Xtream</string>
+    <string name="xtream_username">Usuario</string>
+    <string name="xtream_password">Contraseña</string>
+    <string name="load_from_file">Cargar desde archivo</string>
+    <string name="load_from_url">Cargar desde URL</string>
+    <string name="load_xtream">Conectar con Xtream Codes</string>
+    <string name="no_playlists">No hay listas configuradas</string>
+    <string name="playlist_added">Lista añadida correctamente</string>
+    <string name="playlist_error">Error al cargar la lista</string>
+    <string name="invalid_url">URL inválida</string>
+    <string name="invalid_credentials">Credenciales inválidas</string>
+
+    <!-- Player -->
+    <string name="now_playing">Reproduciendo ahora</string>
+    <string name="buffering">Buffering…</string>
+    <string name="live">EN VIVO</string>
+    <string name="quality">Calidad</string>
+    <string name="audio_tracks">Pistas de audio</string>
+    <string name="subtitles">Subtítulos</string>
+    <string name="fullscreen">Pantalla completa</string>
+    <string name="exit_fullscreen">Salir de pantalla completa</string>
+
+    <!-- EPG -->
+    <string name="epg_guide">Guía EPG</string>
+    <string name="no_epg_data">No hay datos EPG disponibles</string>
+
+    <!-- Settings -->
+    <string name="language">Idioma</string>
+    <string name="parental_control">Control parental</string>
+    <string name="player_settings">Ajustes del reproductor</string>
+    <string name="clear_cache">Limpiar caché</string>
+    <string name="about">Acerca de</string>
+    <string name="version">Versión 1.0.0</string>
+
+    <!-- Parental Control -->
+    <string name="set_pin">Establecer PIN</string>
+    <string name="enter_pin">Introduce PIN</string>
+    <string name="confirm_pin">Confirmar PIN</string>
+    <string name="pin_incorrect">PIN incorrecto</string>
+    <string name="pin_set">PIN establecido</string>
+</resources>
