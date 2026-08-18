@@ -85,6 +85,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
             "search" -> {
                 SearchScreen(
                     channels = channels,
+                    categories = categories,
                     onBack = { currentRoute = "home" },
                     onChannelSelected = { channel ->
                         selectedChannel = channel
@@ -98,6 +99,8 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                     onBack = { currentRoute = "home" },
                     onFavoriteToggle = { /* toggle favorite */ },
                     onSettingsClick = { /* show quality/audio/subs */ },
+                    onNextChannel = { /* get next channel */ },
+                    onPreviousChannel = { /* get previous channel */ },
                 )
             }
             "settings" -> {
