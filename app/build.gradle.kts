@@ -4,6 +4,7 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("kotlin-kapt")
     id("kotlin-parcelize")
+    id("io.gitlab.arturbosch.detekt")
 }
 
 android {
@@ -134,4 +135,22 @@ dependencies {
 
 kapt {
     correctErrorTypes = true
+}
+
+detekt {
+    toolVersion = "1.23.6"
+    config = files("$project.rootDir/detekt.yml")
+    baseline = file("$project.rootDir/detekt-baseline.xml")
+    buildUponDefaultConfig = true
+    parallel = true
+    allRules = true
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt> {
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        txt.required.set(false)
+        sarif.required.set(false)
+    }
 }

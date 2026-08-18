@@ -1,0 +1,177 @@
+# Detekt configuration for IPTV Family
+
+build:
+  maxIssues: 100
+  excludeCorrectable: false
+  excludes: '**/test/**/*.kt,**/build/**/*.kt'
+
+console-reports:
+  active: true
+  exclude:
+    - 'ProjectStatisticsReport'
+    - 'ComplexityReport'
+    - 'NotificationReport'
+    - 'FindingsReport'
+    - 'FileBasedFindingsReport'
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+formatting:
+  Indentation:
+    active: true
+    indentSize: 4
+    continuationIndentSize: 4
+  MaximumLineLength:
+    active: true
+    maxLineLength: 120
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludeCommentStatements: false
+  NoMultipleSpaces:
+    active: true
+  NoTabs:
+    active: true
+  NoWildcardImports:
+    active: true
+  NewLineAtEndOfFile:
+    active: true
+  PackageName:
+    active: true
+  TrailingCommaOnCallSite:
+    active: true
+  TrailingCommaOnDeclarationSite:
+    active: true
+  WildcardImport:
+    active: true
+    excludes: ['androidx.*', 'com.google.*']
+
+naming:
+  ClassNaming:
+    active: true
+  ConstantNaming:
+    active: true
+    excludeClassConstants: true
+  EnumNaming:
+    active: true
+  FunctionNaming:
+    active: true
+  MemberNaming:
+    active: true
+  PackageNaming:
+    active: true
+  VariableNaming:
+    active: true
+
+style:
+  MagicNumber:
+    active: true
+    ignoreNumbers: '-1,0,1,2,3,4,5,6,7,8,9,10,100,1000'
+    ignorePropertyDeclaration: true
+    ignoreLocalVariableDeclaration: true
+    ignoreFunctionDeclaration: true
+    ignoreOverriddenFunctionDeclaration: true
+  MandatoryBracesIfStatements:
+    active: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+  NestedBlockDepth:
+    active: true
+    maxDepth: 4
+  NewLineAtEndOfFile:
+    active: true
+  ReturnCount:
+    active: true
+    max: 6
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 11
+    thresholdInClasses: 11
+    thresholdInInterfaces: 11
+    thresholdInObjects: 11
+    thresholdInEnums: 11
+  WildcardImport:
+    active: true
+
+complexity:
+  ComplexCondition:
+    active: true
+    threshold: 4
+  ComplexInterface:
+    active: true
+    threshold: 10
+  ComplexMethod:
+    active: true
+    threshold: 15
+  LargeClass:
+    active: true
+    threshold: 600
+  LongMethod:
+    active: true
+    threshold: 60
+  LongParameterList:
+    active: true
+    threshold: 6
+    ignoreDefaultValues: true
+    ignoreDataClasses: true
+    ignoreAnnotatedParameter: ['Inject']
+  MethodOverloading:
+    active: true
+    threshold: 6
+  NestedBlockDepth:
+    active: true
+    threshold: 4
+  TooManyFunctions:
+    active: true
+    thresholdInClasses: 15
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+    excludes: ['kotlinx.coroutines.CancellationException']
+  TooGenericExceptionThrown:
+    active: true
+
+potential-bugs:
+  CastToNullableType:
+    active: true
+  ExplicitGarbageCollectionCall:
+    active: true
+  ExtendsThrowable:
+    active: true
+  InfiniteRecursion:
+    active: true
+  IteratorHasNext:
+    active: true
+  IteratorNext:
+    active: true
+  LateinitUsage:
+    active: true
+  NullSafeCallOnNullableReceiver:
+    active: true
+  ReturnFromFinally:
+    active: true
+  ThrowingExceptionFromFinally:
+    active: true
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: true
+  ThrowingNullException:
+    active: true
+  UnsafeCallOnNullableType:
+    active: true
+  UnsafeCast:
+    active: true
+
+performance:
+  ArrayPrimitive:
+    active: true
+  ForEachOnRange:
+    active: true
+  MapGetWithNotNullAssertionOperator:
+    active: true
+  SpreadOperator:
+    active: true
+  UnnecessaryTemporaryInstantiation:
+    active: true

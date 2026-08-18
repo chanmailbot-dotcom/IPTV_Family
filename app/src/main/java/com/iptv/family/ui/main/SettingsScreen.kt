@@ -30,14 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.preferencesDataStore
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.rxp22
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.iptv.family.R
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
