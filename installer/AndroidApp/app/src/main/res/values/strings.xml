@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">IPTV Family Downloader</string>
+    <string name="download_and_install">Descargar e Instalar</string>
+    <string name="downloading">Descargando...</string>
+    <string name="installing">Instalando...</string>
+    <string name="install_success">¡Instalado correctamente!</string>
+    <string name="install_error">Error en la instalación</string>
+    <string name="permission_required">Se requiere permiso para instalar apps</string>
+    <string name="open_settings">Abrir Configuración</string>
+</resources>

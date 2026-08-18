@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV Family - Descargar APK</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 48px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #fff 0%, #1e88e5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            color: #aaa;
+            margin-bottom: 32px;
+            font-size: 16px;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 36px;
+            background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+            justify-content: center;
+        }
+        .btn:hover, .btn:focus {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(30, 136, 229, 0.4);
+        }
+        .btn:active { transform: translateY(0); }
+        .icon { font-size: 24px; }
+        .features {
+            margin-top: 32px;
+            text-align: left;
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            background: #1e88e5;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .version {
+            margin-top: 24px;
+            color: #666;
+            font-size: 14px;
+        }
+        .qr-code {
+            margin: 24px 0;
+        }
+        .qr-code img {
+            width: 180px;
+            height: 180px;
+            border-radius: 12px;
+            background: white;
+            padding: 10px;
+        }
+        @media (max-width: 600px) {
+            .container { padding: 24px; }
+            h1 { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📺</div>
+        <h1>IPTV Family</h1>
+        <p class="subtitle">Reproductor IPTV estilo IBO Player para Android TV / Fire TV</p>
+        
+        <a href="https://github.com/chanmailbot-dotcom/IPTV_Family/releases/latest/download/app-release.apk" class="btn" id="downloadBtn">
+            <span class="icon">⬇️</span>
+            Descargar e Instalar APK
+        </a>
+        
+        <div class="qr-code">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https%3A%2F%2Fgithub.com%2Fchanmailbot-dotcom%2FIPTV_Family%2Freleases%2Flatest%2Fdownload%2Fapp-release.apk" alt="QR para descargar en Fire TV">
+            <p style="margin-top: 8px; color: #888; font-size: 12px;">Escanea con tu Fire TV / Android</p>
+        </div>
+        
+        <div class="features">
+            <div class="feature"><span class="feature-icon">📋</span> Listas M3U (URL / Archivo)</div>
+            <div class="feature"><span class="feature-icon">🔐</span> Xtream Codes (Panel + User + Pass)</div>
+            <div class="feature"><span class="feature-icon">📺</span> Live TV / VOD / Series</div>
+            <div class="feature"><span class="feature-icon">📅</span> Guía EPG</div>
+            <div class="feature"><span class="feature-icon">⭐</span> Favoritos</div>
+            <div class="feature"><span class="feature-icon">🔒</span> Control Parental PIN</div>
+            <div class="feature"><span class="feature-icon">🔍</span> Búsqueda instantánea</div>
+            <div class="feature"><span class="feature-icon">📱</span> Android TV / Fire TV / Tablet</div>
+        </div>
+        
+        <p class="version">Versión 1.0.0 • <a href="https://github.com/chanmailbot-dotcom/IPTV_Family" style="color: #1e88e5;">Ver en GitHub</a></p>
+    </div>
+
+    <script>
+        // Detectar si es Fire TV / Android TV
+        const ua = navigator.userAgent.toLowerCase();
+        const isTV = ua.includes('aft') || ua.includes('firetv') || ua.includes('tv') || 
+                     screen.width >= 1920 && screen.height >= 1080;
+        
+        const btn = document.getElementById('downloadBtn');
+        if (isTV) {
+            btn.innerHTML = '<span class="icon">📥</span> Descargar en Fire TV / Android TV';
+            btn.style.fontSize = '20px';
+            btn.style.padding = '20px 40px';
+        }
+        
+        // Log para debug
+        console.log('IPTV Family Downloader - User Agent:', ua);
+        console.log('Is TV device:', isTV);
+    </script>
+</body>
+</html>
