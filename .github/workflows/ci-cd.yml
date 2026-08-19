@@ -89,8 +89,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Clean build
+        run: ./gradlew clean --no-daemon
+
       - name: Build Android Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleDebug --no-daemon --info
 
       - name: Upload Android Debug APK
         uses: actions/upload-artifact@v4
