@@ -77,29 +77,8 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Setup Android SDK
-        run: |
-          set -e
-          # ubuntu-latest runners ship a preinstalled Android SDK
-          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
-          echo "Using SDK at: $SDK"
-          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -1)"
-          fi
-          echo "sdkmanager: $SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-          ls -la "$SDK/platforms/"
-          ls -la "$SDK/build-tools/"
-          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
       - name: Build Android Debug APK
-        run: ./gradlew assembleDebug --no-daemon --info 2>&1 | tail -100
+        run: ./gradlew assembleDebug --no-daemon -i --stacktrace 2>&1 | tail -200
 
       - name: Upload Android Debug APK
         uses: actions/upload-artifact@v4
@@ -124,26 +103,8 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Setup Android SDK
-        run: |
-          set -e
-          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
-          echo "Using SDK at: $SDK"
-          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -1)"
-          fi
-          echo "sdkmanager: $SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
       - name: Build Android Release APK
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -i --stacktrace 2>&1 | tail -200
 
       - name: Upload Android Release APK
         uses: actions/upload-artifact@v4
@@ -155,7 +116,7 @@ jobs:
   build-windows:
     name: Build Windows MSI/EXE
     runs-on: windows-latest
-    needs: build-android]
+    needs: [build-android]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     steps:
       - name: Checkout code
@@ -167,9 +128,6 @@ jobs:
           distribution: 'temurin'
           java-version: 17
           cache: gradle
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
 
       - name: Build Windows Desktop App
         run: echo "Windows build not configured yet - composeApp module removed"
