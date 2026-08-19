@@ -80,10 +80,40 @@ jobs:
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: platforms;android-35,build-tools;35.0.0,platform-tools
-          accept-android-sdk-licenses: true
+        run: |
+          # Create Android SDK directory
+          mkdir -p $ANDROID_HOME
+          
+          # Download and install Android command line tools
+          echo "Downloading Android command line tools..."
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          
+          # Unzip to temp location
+          unzip -q cmdline-tools.zip -d /tmp/android-sdk-temp
+          
+          # Move to correct location
+          mv /tmp/android-sdk-temp/cmdline-tools $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          
+          # Add to PATH
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          
+          # Accept licenses and install packages
+          echo "Accepting Android SDK licenses..."
+          yes | sdkmanager --licenses
+          
+          echo "Installing Android SDK packages..."
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools" "emulator"
+          
+          # Verify installation
+          echo "Verifying Android SDK installation..."
+          ls -la $ANDROID_HOME
+          ls -la $ANDROID_HOME/platforms/
+          ls -la $ANDROID_HOME/build-tools/
+          
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
