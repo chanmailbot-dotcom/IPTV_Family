@@ -1,5 +1,4 @@
 # IPTV Family - GitHub Actions CI/CD
-
 name: CI/CD
 
 on:
@@ -67,7 +66,6 @@ jobs:
   build-android:
     name: Build Android Debug APK
     runs-on: ubuntu-latest
-    needs: []
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,65 +77,11 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Setup Android SDK
-        run: |
-          # Setup Android SDK manually for GitHub Actions
-          echo "Setting up Android SDK..."
-          
-          # Define Android SDK directory
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          
-          # Create directory
-          mkdir -p $ANDROID_HOME
-          
-          # Download command line tools
-          echo "Downloading Android command line tools..."
-          wget -q -O cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          
-          # Extract to correct location
-          unzip -q cmdline-tools.zip -d $ANDROID_HOME
-          mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          
-          # Add to PATH
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          
-          # Accept licenses and install packages
-          echo "Accepting Android SDK licenses..."
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          
-          echo "Installing Android SDK packages..."
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools" "emulator"
-          
-          # Verify installation
-          echo "Verifying Android SDK installation..."
-          ls -la $ANDROID_HOME/platforms/
-          ls -la $ANDROID_HOME/build-tools/
-          
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      - name: Debug environment
-        run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_ROOT=$ANDROID_ROOT"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "PATH=$PATH"
-          java -version
-          ls -la gradlew
-          ./gradlew --version
-
       - name: Build Android Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --info --stacktrace
+        run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Upload Android Debug APK
         uses: actions/upload-artifact@v4
@@ -164,14 +108,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Create Keystore from Secrets
-        if: env.KEYSTORE_BASE64 != ''
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
 
       - name: Build Android Release APK
         run: ./gradlew :app:assembleRelease --no-daemon
@@ -248,8 +184,8 @@ jobs:
           path: release-windows
 
       - name: Download Windows EXE
-        uses: actions/download-artifact@v4
         if: always()
+        uses: actions/download-artifact@v4
         with:
           name: windows-exe
           path: release-windows
@@ -261,14 +197,14 @@ jobs:
           name: "IPTV Family v${{ github.run_number }}"
           body: |
             Release build #${{ github.run_number }}
-            
+
             ## Changes
             ${{ github.event.head_commit.message }}
-            
+
             ## Downloads
             ### Android
             - [app-release.apk](./app-release.apk)
-            
+
             ### Windows
             - [IPTV-Family-Setup.msi](./IPTV-Family-Setup.msi)
             - [IPTV-Family-Installer.exe](./IPTV-Family-Installer.exe)
