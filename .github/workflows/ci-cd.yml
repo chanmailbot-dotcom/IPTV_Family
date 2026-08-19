@@ -82,13 +82,20 @@ jobs:
       - name: Setup Android SDK
         run: |
           mkdir -p $ANDROID_HOME
+          echo "ANDROID_HOME=$ANDROID_HOME"
           cmdline_tools_url="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          wget -q $cmdline_tools_url -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $ANDROID_HOME
-          mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          echo "Downloading $cmdline_tools_url"
+          wget -q $cmdline_tools_url -O cmdline-tools.zip || { echo "wget failed"; exit 1; }
+          echo "Unzipping..."
+          unzip -q cmdline-tools.zip -d $ANDROID_HOME || { echo "unzip failed"; exit 1; }
+          echo "Moving cmdline-tools..."
+          mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools/latest || { echo "mv failed"; exit 1; }
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "PATH=$PATH"
+          echo "Accepting licenses..."
+          yes | sdkmanager --licenses || { echo "sdkmanager licenses failed"; exit 1; }
+          echo "Installing packages..."
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools" || { echo "sdkmanager packages failed"; exit 1; }
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
