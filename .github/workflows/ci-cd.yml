@@ -77,6 +77,12 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 35
+          ndk-version: r27c
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
