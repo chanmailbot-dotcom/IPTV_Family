@@ -92,9 +92,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Clean build
-        run: ./gradlew clean --no-daemon
-
       - name: Build Android Debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --info
 
