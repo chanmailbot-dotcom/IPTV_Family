@@ -62,14 +62,30 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # jpackage solo admite WiX 3.x para generar MSI/EXE. WiX 4+ no sirve.
-      - name: Instalar WiX Toolset v3
+      # jpackage solo admite WiX 3.x para generar MSI/EXE (WiX 4+ no sirve).
+      # windows-latest ya lo trae, asi que solo hay que ponerlo en el PATH.
+      - name: Preparar WiX Toolset v3
+        shell: pwsh
         run: |
-          choco install wixtoolset --version=3.14.1 --no-progress -y
-          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" >> $env:GITHUB_PATH
+          function Find-Candle {
+            Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset v3*" -Directory -ErrorAction SilentlyContinue |
+              ForEach-Object { Join-Path $_.FullName "bin\candle.exe" } |
+              Where-Object { Test-Path $_ } |
+              Select-Object -First 1
+          }
 
-      - name: Comprobar WiX
-        run: candle.exe -? | Select-Object -First 3
+          $candle = Find-Candle
+          if (-not $candle) {
+            Write-Host "WiX 3 no encontrado en el runner; instalando con Chocolatey."
+            choco install wixtoolset --no-progress -y
+            $candle = Find-Candle
+          }
+          if (-not $candle) { throw "No se pudo obtener WiX 3 (candle.exe): jpackage no podra generar el MSI." }
+
+          $bin = Split-Path $candle -Parent
+          Write-Host "WiX 3 en $bin"
+          & $candle -? | Select-Object -First 2
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
 
       # Mete libvlc en composeApp/resources/windows-x64/vlc para que viaje dentro
       # del instalador y el usuario no tenga que instalar VLC aparte.
