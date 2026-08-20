@@ -1,60 +1,14 @@
 package com.iptv.family.di
 
-import android.content.Context
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.iptv.family.data.local.AppDatabase
-import com.iptv.family.data.m3u.M3UParser
-import com.iptv.family.data.repository.PlaylistRepository
-import com.iptv.family.data.xtream.XtreamApiClient
-import com.iptv.family.data.xtream.XtreamApiClientFactory
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.android.scopes.Singleton
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
-import dagger.Module
-import dagger.Provides
-import javax.inject.Inject
-
-@Module
-@InstallIn(SingletonComponent::class)
-object DatabaseModule {
-    @Provides
-    @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
-        return AppDatabase.getInstance(context)
-    }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-object ParserModule {
-    @Provides
-    @Singleton
-    fun provideM3UParser(): M3UParser {
-        return M3UParser()
-    }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-object NetworkModule {
-    @Provides
-    @Singleton
-    fun provideXtreamApiClientFactory(): XtreamApiClientFactory {
-        return XtreamApiClientFactory()
-    }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-object RepositoryModule {
-    @Provides
-    @Singleton
-    fun providePlaylistRepository(
-        database: AppDatabase,
-        m3uParser: M3UParser,
-        xtreamApiFactory: XtreamApiClientFactory,
-    ): PlaylistRepository {
-        return PlaylistRepository(database, m3uParser, xtreamApiFactory)
-    }
-}
+// HILT TEMPORARILY DISABLED - Using manual DI instead
+// import android.content.Context
+// import androidx.room.Room
+// import com.iptv.family.data.m3u.M3UParser
+// import com.iptv.family.data.room.AppDatabase
+// import com.iptv.family.data.repository.PlaylistRepository
+// import dagger.Module
+// import dagger.Provides
+// import dagger.hilt.InstallIn
+// import dagger.hilt.components.SingletonComponent
+// import dagger.hilt.android.qualifiers.ApplicationContext
+// import javax.inject.Singleton

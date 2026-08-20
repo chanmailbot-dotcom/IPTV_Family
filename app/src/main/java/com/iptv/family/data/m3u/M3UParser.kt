@@ -1,147 +1,147 @@
 package com.iptv.family.data.m3u
 
-import com.iptv.family.domain.model.Channel
 import com.iptv.family.domain.model.Category
-import java.io.BufferedReader
+import com.iptv.family.domain.model.Channel
+import com.iptv.family.domain.model.ChannelType
 import java.io.InputStream
-import java.io.InputStreamReader
-import java.util.regex.Pattern
 
+/**
+ * Parser para listas M3U (formato estándar IPTV)
+ *
+ * Formato soportado:
+ * - M3U básico: #EXTM3U / #EXTINF
+ * - M3U con extensión Xtream 19.1.2 (#EXTM3U x-tvg-url=...)
+ */
 class M3UParser {
 
-    companion object {
-        private const val EXTINF_PATTERN = "#EXTINF:"
-        private const val EXTGRP_PATTERN = "group-title="
-        private const val TVG_ID_PATTERN = "tvg-id="
-        private const val TVG_NAME_PATTERN = "tvg-name="
-        private const val TVG_LOGO_PATTERN = "tvg-logo="
-        private const val TVG_SHIFT_PATTERN = "tvg-shift="
-        private const val TVG_COUNTRY_PATTERN = "tvg-country="
-        private const val TVG_LANGUAGE_PATTERN = "tvg-language="
-        private const val TVG_URL_PATTERN = "tvg-url="
-        private const val RADIO_PATTERN = "radio="
-        private const val LIVE_PATTERN = "live="
+    fun parse(input: InputStream): M3UResult {
+        val reader = java.io.BufferedReader(java.io.InputStreamReader(input))
+        val lines = reader.readLines()
+        reader.close()
 
-        fun parse(inputStream: InputStream): M3UParseResult {
-            val reader = BufferedReader(InputStreamReader(inputStream, "UTF-8"))
-            val channels = mutableListOf<Channel>()
-            val categoriesMap = mutableMapOf<String, MutableList<String>>()
-            var currentExtInf: ExtInfData? = null
-            var lineNumber = 0
+        val channels = mutableListOf<Channel>()
+        val categories = mutableMapOf<String, Category>()
+        val categoryIdCounter = mutableMapOf<String, Int>()
 
-            reader.use {
-                it.forEachLine { line ->
-                    lineNumber++
-                    val trimmed = line.trim()
+        var currentName: String? = null
+        var currentLogo: String? = null
+        var currentGroup: String? = null
+        var currentTvgId: String? = null
+        var currentDuration: String? = null
+        var isHeaderProcessed = false
 
-                    if (trimmed.startsWith(EXTINF_PATTERN)) {
-                        currentExtInf = parseExtInf(trimmed)
-                    } else if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
-                        // This is a URL line
-                        val url = trimmed
-                        if (currentExtInf != null) {
-                            val channel = buildChannel(currentExtInf, url)
-                            channels.add(channel)
+        for (line in lines) {
+            val trimmed = line.trim()
 
-                            // Group channels by category
-                            currentExtInf.group?.let { groupName ->
-                                categoriesMap.getOrPut(groupName) { mutableListOf() }.add(channel.id)
-                            }
-                        }
-                        currentExtInf = null
+            when {
+                trimmed.startsWith("#EXTM3U") -> {
+                    isHeaderProcessed = true
+                    continue
+                }
+                trimmed.startsWith("#EXTINF") -> {
+                    val info = parseExtInf(trimmed)
+                    currentName = info.name
+                    currentLogo = info.logo
+                    currentGroup = info.group
+                    currentTvgId = info.tvgId
+                    currentDuration = info.duration
+                }
+                trimmed.startsWith("#EXTVLCOPT") || trimmed.startsWith("#EXTGRP") -> {
+                    continue
+                }
+                trimmed.isEmpty() -> continue
+                else -> {
+                    if (!isHeaderProcessed) isHeaderProcessed = true
+
+                    val streamUrl = trimmed
+
+                    // Asignar categoría
+                    val groupName = currentGroup ?: "Sin categoría"
+                    if (!categories.containsKey(groupName)) {
+                        val catId = "cat_${categories.size + 1}"
+                        categories[groupName] = Category(
+                            id = catId,
+                            name = groupName,
+                            type = ChannelType.LIVE_TV
+                        )
                     }
+
+                    val category = categories[groupName]!!
+                    val channelId = streamUrl.hashCode().toString()
+
+                    channels.add(Channel(
+                        id = channelId,
+                        name = currentName ?: "Canal $channelId",
+                        logoUrl = currentLogo,
+                        streamUrl = streamUrl,
+                        category = category,
+                        type = ChannelType.LIVE_TV,
+                        epgId = currentTvgId,
+                        duration = currentDuration
+                    ))
+
+                    // Reset
+                    currentName = null
+                    currentLogo = null
+                    currentGroup = null
+                    currentTvgId = null
+                    currentDuration = null
                 }
             }
-
-            // Build categories from map
-            val categories = categoriesMap.entries.mapIndexed { index, entry ->
-                Category(
-                    id = "cat_${entry.key.hashCode()}",
-                    name = entry.key,
-                    order = index,
-                    channelIds = entry.value,
-                    isLiveTv = !entry.key.lowercase().contains("vod") && !entry.key.lowercase().contains("movie") && !entry.key.lowercase().contains("series"),
-                    isVod = entry.key.lowercase().contains("vod") || entry.key.lowercase().contains("movie"),
-                    isSeries = entry.key.lowercase().contains("series"),
-                )
-            }.sortedBy { it.order }.toList()
-
-            return M3UParseResult(channels, categories)
         }
 
-        private fun parseExtInf(line: String): ExtInfData {
-            val content = line.substring(EXTINF_PATTERN.length).trim()
-
-            // Parse duration and name (format: duration,name)
-            val commaIndex = content.indexOf(',')
-            val (durationPart, namePart) = if (commaIndex >= 0) {
-                content.substring(0, commaIndex) to content.substring(commaIndex + 1)
-            } else {
-                "0" to content
-            }
-
-            val attributes = mutableMapOf<String, String>()
-
-            // Parse all attributes using regex
-            val attrPattern = Pattern.compile("""(\w+(?:-\w+)*)="([^"]*)"""")
-            val matcher = attrPattern.matcher(content)
-            while (matcher.find()) {
-                attributes[matcher.group(1).lowercase()] = matcher.group(2)
-            }
-
-            return ExtInfData(
-                duration = durationPart.toIntOrNull() ?: 0,
-                name = namePart.trim(),
-                group = attributes["group-title"],
-                tvgId = attributes["tvg-id"],
-                tvgName = attributes["tvg-name"],
-                tvgLogo = attributes["tvg-logo"],
-                tvgShift = attributes["tvg-shift"],
-                tvgCountry = attributes["tvg-country"],
-                tvgLanguage = attributes["tvg-language"],
-                tvgUrl = attributes["tvg-url"],
-                isRadio = attributes["radio"]?.toBoolean() ?: false,
-                isLive = attributes["live"]?.toBoolean() ?: true,
-            )
-        }
-
-        private fun buildChannel(extInf: ExtInfData, url: String): Channel {
-            return Channel(
-                id = extInf.tvgId ?: "ch_${url.hashCode()}",
-                name = extInf.name,
-                url = url,
-                logo = extInf.tvgLogo,
-                group = extInf.group,
-                tvgId = extInf.tvgId,
-                tvgName = extInf.tvgName,
-                tvgLogo = extInf.tvgLogo,
-                tvgShift = extInf.tvgShift,
-                tvgCountry = extInf.tvgCountry,
-                tvgLanguage = extInf.tvgLanguage,
-                tvgUrl = extInf.tvgUrl,
-                isRadio = extInf.isRadio,
-                isLive = extInf.isLive,
-            )
-        }
-
-        private data class ExtInfData(
-            val duration: Int,
-            val name: String,
-            val group: String?,
-            val tvgId: String?,
-            val tvgName: String?,
-            val tvgLogo: String?,
-            val tvgShift: String?,
-            val tvgCountry: String?,
-            val tvgLanguage: String?,
-            val tvgUrl: String?,
-            val isRadio: Boolean,
-            val isLive: Boolean,
+        return M3UResult(
+            channels = channels,
+            categories = categories.values.toList()
         )
     }
 
-    data class M3UParseResult(
-        val channels: List<Channel>,
-        val categories: List<Category>,
+    private fun parseExtInf(line: String): ExtInfInfo {
+        var name: String? = null
+        var logo: String? = null
+        var group: String? = null
+        var tvgId: String? = null
+        var duration: String? = null
+
+        // Extraer duración (primer campo después de #EXTINF:)
+        val afterPrefix = line.substringAfter("#EXTINF:", "").trimStart()
+
+        // Buscar duration
+        val durationMatch = afterPrefix.trimStart().takeWhile { it != ',' }
+        duration = durationMatch.trim()
+
+        // Extraer el nombre (después de la coma)
+        name = line.substringAfter(",", "").trim()
+
+        // Extraer atributos del nombre extendido
+        val extInfPattern = Regex("""([\w-]+)="([^"]*)"""")
+        val attrs = extInfPattern.findAll(line).associate {
+            it.groupValues[1] to it.groupValues[2]
+        }
+
+        logo = attrs["tvg-logo"]
+        group = attrs["group-title"]
+        tvgId = attrs["tvg-id"]
+
+        return ExtInfInfo(
+            name = name,
+            logo = logo,
+            group = group,
+            tvgId = tvgId,
+            duration = if (duration.isNullOrEmpty()) null else duration
+        )
+    }
+
+    private data class ExtInfInfo(
+        val name: String?,
+        val logo: String?,
+        val group: String?,
+        val tvgId: String?,
+        val duration: String?
     )
 }
+
+data class M3UResult(
+    val channels: List<Channel>,
+    val categories: List<Category>
+)

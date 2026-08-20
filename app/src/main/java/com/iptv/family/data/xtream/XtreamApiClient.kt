@@ -1,306 +1,297 @@
 package com.iptv.family.data.xtream
 
-import com.iptv.family.domain.model.Channel
 import com.iptv.family.domain.model.Category
+import com.iptv.family.domain.model.Channel
+import com.iptv.family.domain.model.ChannelType
+import com.iptv.family.domain.model.EpgEntry
 import com.iptv.family.domain.model.Playlist
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import retrofit2.Response
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.GET
-import retrofit2.http.Query
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import java.net.HttpURLConnection
+import java.net.URL
 
-interface XtreamApiService {
-    @GET("player_api.php")
-    suspend fun getLiveCategories(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_live_categories"
-    ): Response<XtreamResponse<List<XtreamCategory>>>
-
-    @GET("player_api.php")
-    suspend fun getVodCategories(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_vod_categories"
-    ): Response<XtreamResponse<List<XtreamCategory>>>
-
-    @GET("player_api.php")
-    suspend fun getSeriesCategories(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_series_categories"
-    ): Response<XtreamResponse<List<XtreamCategory>>>
-
-    @GET("player_api.php")
-    suspend fun getLiveStreams(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_live_streams",
-        @Query("category_id") categoryId: String? = null
-    ): Response<XtreamResponse<List<XtreamStream>>>
-
-    @GET("player_api.php")
-    suspend fun getVodStreams(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_vod_streams",
-        @Query("category_id") categoryId: String? = null
-    ): Response<XtreamResponse<List<XtreamStream>>>
-
-    @GET("player_api.php")
-    suspend fun getSeriesStreams(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_series_streams",
-        @Query("category_id") categoryId: String? = null
-    ): Response<XtreamResponse<List<XtreamStream>>>
-
-    @GET("player_api.php")
-    suspend fun getServerInfo(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_server_info"
-    ): Response<XtreamResponse<XtreamServerInfo>>
-
-    @GET("player_api.php")
-    suspend fun getEpg(
-        @Query("username") username: String,
-        @Query("password") password: String,
-        @Query("action") action: String = "get_simple_data_table",
-        @Query("stream_id") streamId: String
-    ): Response<XtreamResponse<XtreamEpgData>>
-}
-
-@Serializable
-data class XtreamResponse<T>(
-    val success: Boolean = true,
-    val data: T? = null,
-    val message: String? = null,
-    val error: String? = null,
-)
-
-@Serializable
-data class XtreamCategory(
-    val category_id: String,
-    val category_name: String,
-    val parent_id: Int = 0,
-)
-
-@Serializable
-data class XtreamStream(
-    val stream_id: String,
-    val name: String,
-    val stream_icon: String? = null,
-    val epg_channel_id: String? = null,
-    val category_id: String? = null,
-    val added: String? = null,
-    val is_adult: String? = null,
-    val stream_type: String? = null,
-    val num: Int = 0,
-    val stream_source: String? = null,
-    val stream_source_type: String? = null,
-    val container_extension: String? = null,
-    val rating: String? = null,
-    val rating_5based: Float = 0f,
-    val release_date: String? = null,
-    val director: String? = null,
-    val cast: String? = null,
-    val description: String? = null,
-    val plot: String? = null,
-    val genre: String? = null,
-    val duration: String? = null,
-    val duration_secs: Int = 0,
-    val season: String? = null,
-    val episode: String? = null,
-    val series_id: String? = null,
-    val series_cat: String? = null,
-    val season_id: String? = null,
-    val cover: String? = null,
-    val backdrop: String? = null,
-    val youtube_trailer: String? = null,
-    val last_modified: String? = null,
-    val tmdb_id: String? = null,
-    val tvdb_id: String? = null,
-    val country: String? = null,
-    val language: String? = null,
-    val imdb_rating: String? = null,
-    val is_serie: String? = null,
-    val is_movie: String? = null,
-    val is_live: String? = null,
-    val has_epg: String? = null,
-    val season_name: String? = null,
-    val episode_num: String? = null,
-    val season_cover: String? = null,
-    val episode_info: String? = null,
-)
-
-@Serializable
-data class XtreamServerInfo(
-    val url: String,
-    val port: String,
-    val version: String,
-    val time_zone: String,
-    val timestamp_now: Long,
-    val timestamp_timezone_offset: Int,
-)
-
-@Serializable
-data class XtreamEpgData(
-    val epg_listings: Map<String, List<XtreamEpgEntry>>,
-) {
-    @Serializable
-    data class XtreamEpgEntry(
-        val start: Long,
-        val end: Long,
-        val title: String,
-        val description: String? = null,
-    )
-}
-
-class XtreamApiClient private constructor(
-    private val service: XtreamApiService,
+/**
+ * Cliente para Xtream Codes API
+ *
+ * Endpoints estándar:
+ * - /login?username=X&password=Y
+ * - /player_api.php?username=X&password=Y&action=get_live_streams
+ * - /player_api.php?username=X&password=Y&action=get_vod_streams
+ * - /player_api.php?username=X&password=Y&action=get_series
+ * - /player_api.php?username=X&password=Y&action=get_short_epg&epg_id=ID
+ */
+class XtreamApiClient(
     private val baseUrl: String,
     private val username: String,
     private val password: String,
+    private val json: Json = Json { ignoreUnknownKeys = true }
 ) {
-    companion object {
-        fun create(baseUrl: String, username: String, password: String): XtreamApiClient {
-            val normalizedUrl = baseUrl.trim().removeSuffix("/")
-            val retrofit = Retrofit.Builder()
-                .baseUrl("$normalizedUrl/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build()
-            return XtreamApiClient(retrofit.create(XtreamApiService::class.java), normalizedUrl, username, password)
-        }
+
+    private fun parseJson(response: String): JsonElement {
+        return json.parseToJsonElement(response)
     }
 
-    suspend fun testConnection(): XtreamConnectionResult {
-        return try {
-            val response = service.getServerInfo(username, password)
-            if (response.isSuccessful && response.body()?.success == true) {
-                val serverInfo = response.body()?.data
-                XtreamConnectionResult.Success(serverInfo)
+    private fun getStringOrNull(obj: JsonObject, key: String): String? {
+        val element = obj[key]
+        return if (element is JsonPrimitive) element.content else null
+    }
+
+    private fun getIntOrNull(obj: JsonObject, key: String): Int? {
+        val element = obj[key]
+        return if (element is JsonPrimitive) element.content.toIntOrNull() else null
+    }
+
+    /**
+     * Verifica las credenciales y obtiene información del servidor
+     */
+    fun login(): XtreamLoginResult {
+        val url = "$baseUrl/login?username=$username&password=$password"
+        return safeRequest(url) { response ->
+            val obj = parseJson(response) as JsonObject
+            val user = obj["user_info"] as? JsonObject
+            if (user != null) {
+                XtreamLoginResult.Success(
+                    status = getStringOrNull(obj, "status") ?: "OK",
+                    username = getStringOrNull(user, "username") ?: "",
+                    expDate = getStringOrNull(user, "exp_date") ?: ""
+                )
             } else {
-                XtreamConnectionResult.Failure(response.body()?.message ?: "Error de conexión")
+                XtreamLoginResult.Error("Invalid credentials")
             }
-        } catch (e: Exception) {
-            XtreamConnectionResult.Failure(e.message ?: "Error de red")
-        }
+        } ?: XtreamLoginResult.Error("Login failed")
     }
 
-    suspend fun loadAllContent(): XtreamLoadResult {
+    /**
+     * Obtiene todos los canales Live TV
+     */
+    fun getLiveStreams(): List<Channel> {
+        val url = "$baseUrl/player_api.php?username=$username&password=$password&action=get_live_streams"
+        return safeRequest(url) { response ->
+            val elements = parseJson(response) as JsonArray
+            elements.mapNotNull { element ->
+                val obj = element as JsonObject
+                val id = getStringOrNull(obj, "channelID") ?: return@mapNotNull null
+                val name = getStringOrNull(obj, "name") ?: "Canal $id"
+                val logo = getStringOrNull(obj, "logo")
+                val streamId = getStringOrNull(obj, "stream_id") ?: id
+                val catId = getStringOrNull(obj, "category_id") ?: "0"
+
+                Channel(
+                    id = id,
+                    name = name,
+                    logoUrl = logo,
+                    streamUrl = "$baseUrl/live/$username/$password/$streamId/index.m3u8",
+                    category = Category(catId, "Category $catId", ChannelType.LIVE_TV),
+                    type = ChannelType.LIVE_TV,
+                    epgId = getStringOrNull(obj, "epg_channel_id")
+                )
+            }
+        } ?: emptyList()
+    }
+
+    /**
+     * Obtiene todos los contenidos VOD
+     */
+    fun getVodStreams(): List<Channel> {
+        val url = "$baseUrl/player_api.php?username=$username&password=$password&action=get_vod_streams"
+        return safeRequest(url) { response ->
+            val elements = parseJson(response) as JsonArray
+            elements.mapNotNull { element ->
+                val obj = element as JsonObject
+                val id = getStringOrNull(obj, "vod_id") ?: getStringOrNull(obj, "id") ?: return@mapNotNull null
+                val name = getStringOrNull(obj, "name") ?: "VOD $id"
+                val logo = getStringOrNull(obj, "cover")
+                val streamId = getStringOrNull(obj, "stream_id") ?: id
+                val catId = getStringOrNull(obj, "category_id") ?: "0"
+                val containerExt = getStringOrNull(obj, "container_extension") ?: "mp4"
+
+                Channel(
+                    id = id,
+                    name = name,
+                    logoUrl = logo,
+                    description = getStringOrNull(obj, "description") ?: "",
+                    streamUrl = "$baseUrl/movie/$username/$password/$streamId/$containerExt",
+                    category = Category(catId, "Movies", ChannelType.VOD),
+                    type = ChannelType.VOD,
+                    duration = getStringOrNull(obj, "duration"),
+                    year = getStringOrNull(obj, "year"),
+                    rating = getStringOrNull(obj, "rating")
+                )
+            }
+        } ?: emptyList()
+    }
+
+    /**
+     * Obtiene todas las series
+     */
+    fun getSeriesStreams(): List<Channel> {
+        val url = "$baseUrl/player_api.php?username=$username&password=$password&action=get_series"
+        return safeRequest(url) { response ->
+            val elements = parseJson(response) as JsonArray
+            elements.mapNotNull { element ->
+                val obj = element as JsonObject
+                val id = getStringOrNull(obj, "series_id") ?: getStringOrNull(obj, "id") ?: return@mapNotNull null
+                val name = getStringOrNull(obj, "name") ?: "Series $id"
+                val logo = getStringOrNull(obj, "cover")
+                val catId = getStringOrNull(obj, "category_id") ?: "0"
+
+                Channel(
+                    id = id,
+                    name = name,
+                    logoUrl = logo,
+                    description = getStringOrNull(obj, "description") ?: "",
+                    streamUrl = "",
+                    category = Category(catId, "Series", ChannelType.SERIES),
+                    type = ChannelType.SERIES,
+                    rating = getStringOrNull(obj, "rating")
+                )
+            }
+        } ?: emptyList()
+    }
+
+    /**
+     * Obtiene las categorías de contenido
+     */
+    fun getCategories(type: String = "live"): List<Category> {
+        val url = "$baseUrl/player_api.php?username=$username&password=$password&action=get_categories&category_type=$type"
+        return safeRequest(url) { response ->
+            val elements = parseJson(response) as JsonArray
+            elements.mapNotNull { element ->
+                val obj = element as JsonObject
+                val id = getStringOrNull(obj, "category_id") ?: return@mapNotNull null
+                val name = getStringOrNull(obj, "category_name") ?: "Categoría $id"
+                val catType = when (type) {
+                    "live" -> ChannelType.LIVE_TV
+                    "vod" -> ChannelType.VOD
+                    "series" -> ChannelType.SERIES
+                    else -> ChannelType.LIVE_TV
+                }
+                Category(
+                    id = id,
+                    name = name,
+                    type = catType
+                )
+            }
+        } ?: emptyList()
+    }
+
+    /**
+     * Obtiene el EPG de un canal
+     */
+    fun getShortEpg(epgId: String): List<EpgEntry> {
+        val url = "$baseUrl/player_api.php?username=$username&password=$password&action=get_short_epg&epg_id=$epgId"
+        return safeRequest(url) { response ->
+            val obj = parseJson(response) as JsonObject
+            val epgList = obj["epg_list"] as? JsonArray
+            epgList?.mapNotNull { element ->
+                val e = element as JsonObject
+                EpgEntry(
+                    id = getStringOrNull(e, "id") ?: "",
+                    channelId = epgId,
+                    title = getStringOrNull(e, "title") ?: "",
+                    description = getStringOrNull(e, "description") ?: "",
+                    startTime = parseEpoch(getStringOrNull(e, "start_timestamp")),
+                    endTime = parseEpoch(getStringOrNull(e, "stop_timestamp")),
+                    timezone = getStringOrNull(e, "timezone")
+                )
+            } ?: emptyList()
+        } ?: emptyList()
+    }
+
+    /**
+     * Obtiene episodios de una serie
+     */
+    fun getSeriesEpisodes(seriesId: String): List<SeriesSeason> {
+        val url = "$baseUrl/serial/series?username=$username&password=$password&action=info&series_id=$seriesId"
+        return safeRequest(url) { response ->
+            val obj = parseJson(response) as JsonObject
+            val episodes = obj["episodes"] as? JsonObject
+            episodes?.map { (season, seasonData) ->
+                val seasonNumber = season.replace("season_", "").toIntOrNull() ?: 0
+                val episodesList = (seasonData as JsonArray).mapIndexed { index, epElement ->
+                    val ep = epElement as JsonObject
+                    SeriesEpisode(
+                        id = getStringOrNull(ep, "id") ?: "",
+                        title = getStringOrNull(ep, "title") ?: "Episodio ${index + 1}",
+                        overview = getStringOrNull(ep, "overview") ?: "",
+                        seasonNumber = seasonNumber,
+                        episodeNumber = getIntOrNull(ep, "episode") ?: index + 1,
+                        airDate = getStringOrNull(ep, "airstamp") ?: "",
+                        streamUrl = getStringOrNull(ep, "stream_id")?.let { id ->
+                            "$baseUrl/serial/$username/$password/$seriesId/$id/index.m3u8"
+                        } ?: ""
+                    )
+                }
+                SeriesSeason(
+                    number = seasonNumber,
+                    episodes = episodesList
+                )
+            }?.toList() ?: emptyList()
+        } ?: emptyList()
+    }
+
+    private fun parseEpoch(timestamp: String?): Long {
         return try {
-            val serverInfoResponse = service.getServerInfo(username, password)
-            if (!serverInfoResponse.isSuccessful || serverInfoResponse.body()?.success != true) {
-                return XtreamLoadResult.Failure("No se pudo obtener información del servidor")
+            timestamp?.toLong() ?: 0
+        } catch (e: NumberFormatException) {
+            0
+        }
+    }
+
+    private inline fun <reified T> safeRequest(
+        urlString: String,
+        parser: (String) -> T
+    ): T? {
+        return try {
+            val url = URL(urlString)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 30000
+                setRequestProperty("User-Agent", "IPTV-Family/1.0")
             }
-            val serverInfo = serverInfoResponse.body()!!.data!!
-
-            // Load categories in parallel
-            val liveCategoriesResponse = service.getLiveCategories(username, password)
-            val vodCategoriesResponse = service.getVodCategories(username, password)
-            val seriesCategoriesResponse = service.getSeriesCategories(username, password)
-
-            val allCategories = mutableListOf<XtreamCategory>()
-            liveCategoriesResponse.body()?.data?.forEach { allCategories.add(it.copy(category_id = "live_${it.category_id}")) }
-            vodCategoriesResponse.body()?.data?.forEach { allCategories.add(it.copy(category_id = "vod_${it.category_id}")) }
-            seriesCategoriesResponse.body()?.data?.forEach { allCategories.add(it.copy(category_id = "series_${it.category_id}")) }
-
-            // Load streams for each category
-            val allStreams = mutableListOf<XtreamStream>()
-
-            // Live streams
-            val liveStreamsResponse = service.getLiveStreams(username, password)
-            liveStreamsResponse.body()?.data?.forEach { allStreams.add(it) }
-
-            // VOD streams
-            val vodStreamsResponse = service.getVodStreams(username, password)
-            vodStreamsResponse.body()?.data?.forEach { allStreams.add(it) }
-
-            // Series streams
-            val seriesStreamsResponse = service.getSeriesStreams(username, password)
-            seriesStreamsResponse.body()?.data?.forEach { allStreams.add(it) }
-
-            XtreamLoadResult.Success(
-                serverInfo = serverInfo,
-                categories = allCategories,
-                streams = allStreams,
-            )
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            parser(response)
         } catch (e: Exception) {
-            XtreamLoadResult.Failure(e.message ?: "Error cargando contenido")
+            e.printStackTrace()
+            null
         }
-    }
-
-    fun toDomainModels(
-        playlistId: String,
-        playlistName: String,
-        loadResult: XtreamLoadResult.Success,
-    ): Pair<List<Channel>, List<Category>> {
-        val streams = loadResult.streams
-        val categories = loadResult.categories
-
-        val categoryMap = categories.associateBy { it.category_id } { it.category_name }
-
-        val channels = streams.map { stream ->
-            val streamUrl = buildStreamUrl(stream)
-            val catName = categoryMap[stream.category_id ?: ""] ?: "General"
-            Channel(
-                id = "xtream_${stream.stream_id}",
-                name = stream.name,
-                url = streamUrl,
-                logo = stream.stream_icon,
-                group = catName,
-                tvgId = stream.epg_channel_id,
-                tvgName = stream.name,
-                tvgLogo = stream.stream_icon,
-                isRadio = stream.stream_type == "radio",
-                isLive = stream.is_live?.toBoolean() ?: (stream.stream_type == "live"),
-                categories = listOf(catName),
-            )
-        }
-
-        val domainCategories = categories.map { cat ->
-            val catStreams = streams.filter { categoryMap[it.category_id ?: ""] == cat.category_name }
-            Category(
-                id = cat.category_id,
-                name = cat.category_name,
-                order = catStreams.size,
-                channelIds = catStreams.map { "xtream_${it.stream_id}" },
-                isLiveTv = cat.category_id.startsWith("live_"),
-                isVod = cat.category_id.startsWith("vod_"),
-                isSeries = cat.category_id.startsWith("series_"),
-            )
-        }
-
-        return channels to domainCategories
-    }
-
-    private fun buildStreamUrl(stream: XtreamStream): String {
-        val extension = stream.container_extension ?: "m3u8"
-        return "$baseUrl/$username/$password/${stream.stream_id}.$extension"
     }
 }
 
-sealed class XtreamConnectionResult {
-    data class Success(val serverInfo: XtreamServerInfo?) : XtreamConnectionResult()
-    data class Failure(val message: String) : XtreamConnectionResult()
-}
-
-sealed class XtreamLoadResult {
+/**
+ * Resultado del login a Xtream
+ */
+sealed class XtreamLoginResult {
     data class Success(
-        val serverInfo: XtreamServerInfo,
-        val categories: List<XtreamCategory>,
-        val streams: List<XtreamStream>,
-    ) : XtreamLoadResult()
-    data class Failure(val message: String) : XtreamLoadResult()
+        val status: String,
+        val username: String,
+        val expDate: String
+    ) : XtreamLoginResult()
+
+    data class Error(val message: String) : XtreamLoginResult()
 }
 
-// Factory class for DI
-class XtreamApiClientFactory {
-    fun create(baseUrl: String, username: String, password: String): XtreamApiClient {
-        return XtreamApiClient.create(baseUrl, username, password)
-    }
-}
+/**
+ * Temporada de serie
+ */
+data class SeriesSeason(
+    val number: Int,
+    val episodes: List<SeriesEpisode>
+)
+
+/**
+ * Episodio de serie
+ */
+data class SeriesEpisode(
+    val id: String,
+    val title: String,
+    val overview: String,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+    val airDate: String,
+    val streamUrl: String
+)
