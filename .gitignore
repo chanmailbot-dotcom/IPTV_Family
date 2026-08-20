@@ -1,0 +1,26 @@
+# Gradle / build artifacts
+**/build/
+build/
+.gradle/
+gradle/wrapper/dists/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+.DS_Store
+
+# Kotlin
+*.ktsession
+.kotlin/
+
+# Local keystores / secrets
+*.jks
+*.p12
+*.keystore
+.env
+
+# App local data
+*.sqlite
+*.db

@@ -1,79 +1,80 @@
-# IPTV Family - Plan de Desarrollo
+# IPTV_Family - Plan de Desarrollo
 
-## Visión
-Clone funcional y estética de IBO Player para Android: un reproductor IPTV premium que soporta listas M3U y Xtream Codes (URL + usuario/contraseña), con UI simple, categorías, EPG, favoritos, control parental y reproductor de alta calidad.
+## Objetivo
+Clonar funcionalidad de IBO Player — reproductor IPTV premium para Android TV / Teléfonos / Tablets.
 
-## Características Clave (basadas en IBO Player)
-| Categoría | Características |
-|---|---|
-| **Fuentes de contenido** | - Archivo M3U local<br>- URL M3U remoto<br>- Xtream Codes API (URL panel + usuario + password) |
-| **Navegación** | - Categorías/grupos de canales (Live TV, VOD, Series)<br>- Búsqueda de canales<br>- Favoritos<br>- Historial |
-| **Reproducción** | - ExoPlayer basado<br>- Reproducción de alta calidad (HD/Full HD/4K)<br>- Modo full-screen<br>- Subtítulos (si están disponibles) |
-| **EPG** | - Guía electrónica de programas (si el proveedor lo ofrece)<br>- Soporte EPG overlay |
-| **Configuración** | - Multilingüe<br>- Control parental<br>- Ajustes de reproductor<br>- Gestión de playlists |
-| **Dispositivos** | Android TV, Phone, Tablet |
+## Criterios de éxito
+- [ ] Soporte listas M3U (archivo local + URL remota)
+- [ ] Soporte Xtream Codes API (URL + user + pass)
+- [ ] UI Material 3, multilingüe (español)
+- [ ] Categorías: Live TV, VOD, Series
+- [ ] EPG (guía electrónica de programas)
+- [ ] Favoritos
+- [ ] Control parental
+- [ ] Reproductor basado en ExoPlayer / Media3
+- [ ] Package: `com.iptv.family`
 
-## Arquitectura Técnica
-- **Lenguaje:** Kotlin
-- **UI:** Jetpack Compose + Material 3
-- **Reproductor:** Media3 ExoPlayer
-- **Arquitectura:** MVVM + Repository + Clean Architecture
-- **DI:** Hilt
-- **DB:** Room (playlists, favoritos, EPG cache)
-- **Red:** Retrofit + OkHttp
-- **Min SDK:** 21 (Android 5.0)
-- **Target SDK:** 34
-- **Package:** com.iptv.family
+## Roadmap
 
-## Estructura del Proyecto
+### Fase 1: Foundation (COMPLETADA)
+- ✅ Repo GitHub creado
+- ✅ Projecto Android base (Kotlin + Compose Material 3)
+- ✅ Hilt DI configurado
+- ✅ Theme.kt creado
+- ✅ CI/CD workflow básico
+
+### Fase 2: Data Layer (EN PROGRESO)
+- [ ] M3U Parser - parsear archivos M3U/Xtream 19.1.2
+- [ ] Xtream Codes API Client - login, getLiveStreams, getVodStreams, getSeries
+- [ ] Room entities: Playlist, Channel, Category, EPG, Favorite
+- [ ] DAO interfaces y Database
+
+### Fase 3: Player Core
+- [ ] ExoPlayer/Media3 wrapper con cache
+- [ ] Gestión de reproducción (play/pause, seek)
+- [ ] Subtítulos y audio tracks
+
+### Fase 4: UI Layer
+- [ ] MainActivity con navegación (Navigation Compose)
+- [ ] Pantalla: Lista de playlists
+- [ ] Pantalla: Navegación de canales (Live TV, VOD, Series)
+- [ ] Pantalla: Reproductor fullscreen
+- [ ] Pantalla: Ajustes (Settings)
+- [ ] Pantalla: Control parental (PIN)
+- [ ] Pantalla: Favoritos
+
+### Fase 5: CI/CD & Release
+- [ ] Build APK exitoso en GitHub Actions
+- [ ] GitHub Release con APK descargable
+
+## Arquitectura
+
 ```
-app/
-├── src/main/
-│   ├── java/com/iptv/family/
-│   │   ├── di/           # Hilt modules
-│   │   ├── ui/           # Composable screens
-│   │   │   ├── home/     # Main screen, category browser
-│   │   │   ├── channels/ # Channel list, search
-│   │   │   ├── player/   # Player screen
-│   │   │   ├── settings/ # Settings screens
-│   │   │   ├── epg/      # EPG views
-│   │   │   └── favorites/ # Favoritos
-│   │   ├── data/
-│   │   │   ├── m3u/       # M3U parser
-│   │   │   ├── xtream/    # Xtream API client
-│   │   │   ├── epg/       # EPG parsing
-│   │   │   ├── local/     # Room DB
-│   │   │   └── repository/
-│   │   ├── domain/        # Modelos de dominio
-│   │   ├── player/        # ExoPlayer wrapper
-│   │   └── util/          # Helpers
-│   ├── res/
-│   │   ├── values/        # Strings, themes, colors
-│   │   ├── drawable/      # Icons, imágenes
-│   │   └── xml/           # Preference screens
-│   └── AndroidManifest.xml
-```
+shared/                     # <-- Módulo KMP compartido (NUEVO)
+├── src/commonMain/
+│   ├── model/              # Models: Channel, Playlist, Category, UserSettings, ...
+│   ├── data/
+│   │   ├── m3u/            # M3UParser multiplataforma
+│   │   ├── xtream/         # XtreamApiClient (player_api.php)
+│   │   ├── store/          # KeyValueStore/FileKeyValueStore
+│   │   └── repository/     # LibraryRepository (orquestador)
+└── build.gradle.kts        # Kotlin Multiplatform (destino: desktop y android)
 
-## Referencias
-- [IBO Player](https://iboplayer.com) - App original
-- [IPTVNator](https://github.com/4gray/iptvnator) - Features reference
-- [OwnTV](https://github.com/ahXN00/OwnTV) - Android Kotlin reference
-- [StreamVault-IPTV](https://github.com/Davidona/StreamVault-IPTV) - Android TV Kotlin/Compose reference
+app/                        # Android (Compose) - consume shared
+composeApp/                 # Escritorio Windows/Linux/macOS - consume shared
+installer/                  # Instaladores / scripts de descarga
 
-## Tareas (por prioridad)
-1. ✅ Investigar IBO Player
-2. ✅ Crear memoria del proyecto
-3. ✅ Crear PLAN.md
-4. Configurar repositorio GitHub
-5. Setup proyecto Android inicial
-6. Implementar parsing M3U
-7. Implementar cliente Xtream API
-8. Implementar ExoPlayer wrapper
-9. UI: Pantalla principal con categorías
-10. UI: Lista de canales
-11. UI: Pantalla de reproductor
-12. UI: Configuración y gestión de playlists
-13. Persistencia con Room (favoritos, historial)
-14. Tests unitarios
-15. Build app bundle (AAB)
-16. Subir a GitHub + configurar CI/CD
+## Estado actual (20/08/2026)
+- [x] Módulo KMP `shared` compilando para desktop con tests (M3U parseo, xtream, store JSON)
+- [ ] Conectar `app` (Android) para consumir `shared`
+- [ ] Conectar `composeApp` (escritorio) para consumir `shared` y construir UI de escritorio
+
+## Tecnologías
+- **Kotlin 2.0.21**
+- **Jetpack Compose** (Material 3)
+- **Media3 ExoPlayer** para reproducción
+- **Hilt** para DI
+- **Room** para persistencia
+- **Retrofit + OkHttp** para API
+- **Navigation Compose** para navegación
+- **Datastore** para preferencias
