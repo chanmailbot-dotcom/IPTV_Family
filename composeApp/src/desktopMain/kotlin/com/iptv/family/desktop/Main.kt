@@ -1,219 +1,120 @@
 package com.iptv.family.desktop
 
-import com.iptv.family.shared.ui.theme.IPTVFamilyTheme
+import androidx.compose.desktop.application
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.found.Add
+import androidx.compose.material.icons.found.Favorite
+import androidx.compose.material.icons.found.Home
+import androidx.compose.material.icons.found.PlayArrow
+import androidx.compose.material.icons.found.Settings
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.application
 import androidx.compose.ui.window.singleWindowApplication
+import com.iptv.family.desktop.player.ExternalPlayer
+import com.iptv.family.desktop.state.AppState
+import com.iptv.family.desktop.theme.AppTheme
+import com.iptv.family.desktop.theme.AppThemeMode
+import com.iptv.family.desktop.ui.screens.AddPlaylistDialog
+import com.iptv.family.desktop.ui.screens.ChannelsScreen
+import com.iptv.family.desktop.ui.screens.FavoritesScreen
+import com.iptv.family.desktop.ui.screens.HomeScreen
+import com.iptv.family.desktop.ui.screens.PlayerBanner
+import com.iptv.family.desktop.ui.screens.SettingsScreen
+import com.iptv.family.shared.data.repository.LibraryRepository
+import com.iptv.family.shared.data.store.FileKeyValueStore
+import com.iptv.family.shared.model.Channel
+import kotlinx.coroutines.launch
+import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
-fun main() = singleWindowApplication(
-    title = "IPTV Family",
-    width = 1280,
-    height = 720
-) {
-    IPTVFamilyTheme {
-        DesktopApp()
-    }
-}
+private val tabs = listOf("Inicio", "Canales", "Favoritos", "Ajustes")
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DesktopApp() {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.HOME) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Top App Bar
-        TopAppBar(
-            title = { Text("IPTV Family", fontWeight = FontWeight.Bold) },
-            actions = {
-                IconButton(onClick = { currentScreen = Screen.SEARCH }) {
-                    Icon(Icons.Default.Search, contentDescription = "Buscar")
+fun main() = application {
+    val windowState = WindowState(width = 1200.dp, height = 740.dp)
+    singleWindowApplication(
+        state = windowState,
+        title = "IPTV Family",
+        onCloseRequest = ::exitApplication,
+    ) {
+                val appState = remember {
+            val dir = File(System.getProperty("user.home"), ".iptv-family").apply { mkdirs() }
+            AppState(LibraryRepository(FileKeyValueStore(dir)))
+        }
+        val scope = rememberCoroutineScope()
+        LaunchedEffect(Unit) { appState.loadAll() }
+
+        var selected by remember { mutableStateOf(0) }
+        var currentChannel by remember { mutableStateOf<Channel?>(null) }
+        var showAddDialog by remember { mutableStateOf(false) }
+        val mode = if (appState.settings.selectedTheme.name == "LIGHT") AppThemeMode.LIGHT else AppThemeMode.DARK
+
+        AppTheme(mode) {
+            Scaffold(
+                topBar = { CenterAlignedTopAppBar(title = { Text("IPTV Family") }) },
+                bottomBar = {
+                    PlayerBanner(
+                        channel = currentChannel,
+                        onStop = { currentChannel = null },
+                        onPlay = { currentChannel?.let { ExternalPlayer.play(it.url) } },
+                    )
+                },
+            ) { innerPadding ->
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                ) {
+                    TabRow(selected = selected, modifier = Modifier.width(240.dp)) {
+                        tabs.forEachIndexed { i, title ->
+                            Tab(selected = selected == i, onClick = { selected = i }, text = { Text(title) })
+                        }
+                    }
+                    Box(Modifier.weight(1f)) {
+                        when (selected) {
+                            0 -> HomeScreen(appState, scope, { showAddDialog = true })
+                            1 -> ChannelsScreen(appState, scope) { ch ->
+                                currentChannel = ch
+                                ExternalPlayer.play(ch.url)
+                            }
+                            2 -> FavoritesScreen(appState) { ch ->
+                                currentChannel = ch
+                                ExternalPlayer.play(ch.url)
+                            }
+                            3 -> SettingsScreen(appState, scope)
+                        }
+                    }
                 }
-                IconButton(onClick = { currentScreen = Screen.SETTINGS }) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configuración")
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF121212),
-                titleContentColor = Color.White
+            }
+        }
+
+        if (showAddDialog) {
+            AddPlaylistDialog(
+                onDismiss = { showAddDialog = false },
+                onAddM3uUrl = { name, url -> scope.launch { appState.addM3uUrl(name, url) }; showAddDialog = false },
+                onAddXtream = { name, url, user, pass -> scope.launch { appState.addXtream(name, url, user, pass) }; showAddDialog = false },
+                onAddM3uFile = { name, content -> scope.launch { appState.addM3uFile(name, content) }; showAddDialog = false },
+                onLoadFile = { ExternalPlayer.chooseM3uFile() },
             )
-        )
-        
-        // Content
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            when (currentScreen) {
-                Screen.HOME -> HomeScreen(
-                    onAddPlaylist = { currentScreen = Screen.ADD_PLAYLIST },
-                    onPlayChannel = { currentScreen = Screen.PLAYER }
-                )
-                Screen.ADD_PLAYLIST -> AddPlaylistScreen(onBack = { currentScreen = Screen.HOME })
-                Screen.PLAYER -> PlayerScreen(onBack = { currentScreen = Screen.HOME })
-                Screen.SEARCH -> SearchScreen(onBack = { currentScreen = Screen.HOME })
-                Screen.SETTINGS -> SettingsScreen(onBack = { currentScreen = Screen.HOME })
-            }
         }
-    }
-}
-
-enum class Screen {
-    HOME, ADD_PLAYLIST, PLAYER, SEARCH, SETTINGS
-}
-
-@Composable
-fun HomeScreen(
-    onAddPlaylist: () -> Unit,
-    onPlayChannel: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text("Bienvenido a IPTV Family", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Text("Selecciona una lista de reproducción para comenzar", fontSize = 16.sp, color = Color.Gray)
-        
-        Card(
-            modifier = Modifier.fillMaxWidth().height(120.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
-        ) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF1E88E5), modifier = androidx.compose.ui.Modifier.size(48.dp))
-                    androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
-                    Text("Agregar lista M3U / Xtream Codes", fontSize = 18.sp, color = Color.White)
-                    Text("URL M3U, archivo local o panel Xtream", fontSize = 14.sp, color = Color.Gray)
-                }
-            }
-        }
-        
-        Button(
-            onClick = onAddPlaylist,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF1E88E5),
-                contentColor = Color.White
-            )
-        ) {
-            Text("Agregar Playlist", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun AddPlaylistScreen(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        androidx.compose.material3.TopAppBar(
-            title = { Text("Agregar Playlist") },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Star, contentDescription = "Atrás") } }
-        )
-        
-        Text("Próximamente: Formulario para agregar M3U URL, archivo local o Xtream Codes", 
-             fontSize = 16.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-             modifier = Modifier.fillMaxSize().padding(24.dp))
-    }
-}
-
-@Composable
-fun PlayerScreen(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        androidx.compose.material3.TopAppBar(
-            title = { Text("Reproductor") },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Star, contentDescription = "Atrás") } }
-        )
-        
-        Card(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Black)
-        ) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF1E88E5), modifier = androidx.compose.ui.Modifier.size(80.dp))
-                    androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(16.dp))
-                    Text("Reproductor de Video", fontSize = 24.sp, color = Color.White)
-                    Text("Integración con MediaPlayer nativo / VLC", fontSize = 16.sp, color = Color.Gray)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SearchScreen(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        androidx.compose.material3.TopAppBar(
-            title = { Text("Buscar") },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Star, contentDescription = "Atrás") } }
-        )
-        
-        Text("Búsqueda de canales", fontSize = 24.sp, color = Color.White)
-        Text("Próximamente: Búsqueda en tiempo real con filtrado por categorías", 
-             fontSize = 16.sp, color = Color.Gray, modifier = Modifier.padding(24.dp))
-    }
-}
-
-@Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        androidx.compose.material3.TopAppBar(
-            title = { Text("Configuración") },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Star, contentDescription = "Atrás") } }
-        )
-        
-        Text("Configuración", fontSize = 24.sp, color = Color.White)
-        Text("Próximamente: Tema, idioma, buffer, control parental, etc.", 
-             fontSize = 16.sp, color = Color.Gray, modifier = Modifier.padding(24.dp))
     }
 }
