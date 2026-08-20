@@ -67,6 +67,7 @@ data class UserSettings(
     val locale: String = "es",
     val bufferMs: Int = 15000,
     val enableHardwareDecoding: Boolean = true,
+    val videoCompatibilityMode: Boolean = false,
     val enableChromecast: Boolean = false,
     val enableSubtitles: Boolean = true,
     val autoPlayNext: Boolean = true

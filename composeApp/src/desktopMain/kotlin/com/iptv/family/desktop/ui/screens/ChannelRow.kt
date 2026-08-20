@@ -1,64 +1,109 @@
 package com.iptv.family.desktop.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.found.Favorite
-import androidx.compose.material.icons.found.FavoriteBorder
-import androidx.compose.material.icons.found.PlayArrow
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.iptv.family.desktop.ui.rememberRemoteImageBitmap
 import com.iptv.family.desktop.state.AppState
+import com.iptv.family.desktop.ui.ChannelLogo
 import com.iptv.family.shared.model.Channel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
 fun ChannelRow(
     channel: Channel,
-    onClick: (Channel) -> Unit,
-    scope: kotlinx.coroutines.CoroutineScope,
+    onChannelClick: (Channel) -> Unit,
+    scope: CoroutineScope,
     appState: AppState,
+    isCurrent: Boolean = false,
+    compact: Boolean = false,
 ) {
-    ListItem(
-        headlineText = { Text(channel.name) },
-        supportingText = { Text(channel.group ?: "Sin grupo", style = MaterialTheme.typography.bodySmall) },
-        leadingContent = {
-            Box(Modifier.size(40.dp)) {
-                val bmp = rememberRemoteImageBitmap(channel.logoUrl)
-                if (bmp != null) {
-                    Image(bitmap = bmp, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(0.2f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-        },
-        trailingContent = {
-            IconButton({ scope.launch { appState.toggleFavorite(channel.id) } }) {
-                Icon(
-                    if (channel.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (channel.isFavorite) "Favorito" else "Añadir a favoritos",
-                    tint = if (channel.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val fav = appState.isFavorite(channel.id)
+
+    val background = when {
+        isCurrent -> MaterialTheme.colorScheme.primaryContainer
+        hovered -> MaterialTheme.colorScheme.surfaceContainerHigh
+        else -> MaterialTheme.colorScheme.surfaceContainer
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(background, MaterialTheme.shapes.medium)
+            .hoverable(interaction)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable { onChannelClick(channel) }
+            .padding(horizontal = 10.dp, vertical = if (compact) 6.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ChannelLogo(channel.logoUrl, channel.name, size = if (compact) 32.dp else 44.dp)
+
+        Column(Modifier.weight(1f)) {
+            Text(
+                channel.name,
+                style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (!compact) {
+                Text(
+                    channel.group ?: "Sin grupo",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
-        },
-        modifier = Modifier.clickable { onClick(channel) },
-    )
+        }
+
+        IconButton(
+            onClick = { scope.launch { appState.toggleFavorite(channel.id) } },
+            modifier = Modifier.size(if (compact) 30.dp else 36.dp),
+        ) {
+            Icon(
+                if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                contentDescription = if (fav) "Quitar de favoritos" else "Añadir a favoritos",
+                tint = if (fav) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(if (compact) 18.dp else 20.dp),
+            )
+        }
+
+        if (!compact) {
+            IconButton(onClick = { onChannelClick(channel) }, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Rounded.PlayArrow,
+                    contentDescription = "Reproducir ${channel.name}",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
 }

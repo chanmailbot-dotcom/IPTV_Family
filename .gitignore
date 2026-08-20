@@ -24,3 +24,6 @@ gradle/wrapper/dists/
 # App local data
 *.sqlite
 *.db
+# Runtime de VLC descargado durante el empaquetado (ver scripts/fetch-vlc.ps1)
+composeApp/resources/windows-x64/
+composeApp/resources/linux-x64/

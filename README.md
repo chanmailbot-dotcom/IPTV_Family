@@ -1,149 +1,89 @@
 # IPTV Family
 
-**Un reproductor IPTV moderno para Android inspirado en IBO Player**
+**Reproductor IPTV para Windows, Linux y macOS — y Android TV / Fire TV en camino**
 
 [![CI/CD](https://github.com/chanmailbot-dotcom/IPTV_Family/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/chanmailbot-dotcom/IPTV_Family/actions/workflows/ci-cd.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.0.21-purple.svg)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/compose-1.7.0-green.svg)](https://developer.android.com/jetpack/compose)
 
-## 📺 Características
+## Instalar en Windows
 
-- **Soporte M3U**: Carga listas M3U desde URL remota o archivo local
-- **Xtream Codes API**: Conexión completa con panel Xtream (URL + usuario + contraseña)
-- **Reproductor basado en ExoPlayer (Media3)**: Reproducción fluida de HLS, DASH, MPEG-DASH
-- **Interfaz moderna**: Jetpack Compose + Material 3, diseño inspirado en IBO Player
-- **Categorías**: Live TV, VOD, Series organizados por grupos
-- **EPG**: Guía electrónica de programas (cuando el proveedor la ofrece)
-- **Favoritos**: Marca y accede rápido a tus canales preferidos
-- **Control parental**: PIN para proteger contenido adulto
-- **Búsqueda**: Busca canales por nombre en tiempo real
-- **Configuración**: Tema, idioma, buffer, sincronización en la nube
-- **Android TV / Phone / Tablet**: UI adaptativa para todos los factores de forma
+Descarga el `.msi` de la [última release](https://github.com/chanmailbot-dotcom/IPTV_Family/releases)
+y ejecútalo. Trae el motor de vídeo y el runtime de Java dentro: **no hace falta
+instalar VLC ni Java aparte**.
 
-## 🏗️ Arquitectura
+## Qué hace
+
+- Listas **M3U** por URL, o un archivo `.m3u` que ya tengas en el equipo
+- Paneles **Xtream Codes** (URL + usuario + contraseña)
+- Vídeo **dentro de la aplicación** (HLS, MPEG-TS, RTMP) sobre libvlc
+- Categorías del proveedor, con filtro TV en directo / Películas / Series
+- Buscador de canales, favoritos, logos de canal
+- Lista de zapeo al lado del vídeo para cambiar de canal sin salir
+- Control parental con PIN para las categorías de adultos
+- Pantalla completa, buffer de red ajustable, aceleración por hardware
+- Recuerda la última lista abierta al arrancar
+
+Atajos durante la reproducción: `Espacio` pausa, `F` pantalla completa, `Esc` sale de ella.
+
+## Estructura del proyecto
 
 ```
-IPTV Family
-├── app/
-│   ├── src/main/java/com/iptv/family/
-│   │   ├── data/
-│   │   │   ├── local/           # Room Database (Entity, DAO, Database)
-│   │   │   ├── m3u/             # M3U Parser
-│   │   │   ├── xtream/          # Xtream Codes API Client
-│   │   │   └── repository/      # Repository Pattern
-│   │   ├── di/                  # Hilt Modules
-│   │   ├── domain/
-│   │   │   └── model/           # Domain Models (Channel, Category, Playlist, etc.)
-│   │   ├── player/              # ExoPlayer Wrapper + MediaSessionService
-│   │   └── ui/
-│   │       └── main/            # Compose Screens (Home, Player, Search, Settings, AddPlaylist)
-│   └── src/test/                # Unit Tests
-├── .github/workflows/           # CI/CD Pipeline
-├── detekt.yml                   # Kotlin Linter Config
-├── build.gradle.kts             # Project Build
-└── settings.gradle.kts          # Project Settings
+shared/        Modulo KMP: modelos, parser M3U, cliente Xtream, XMLTV, persistencia
+composeApp/    Aplicacion de escritorio (Compose Multiplatform + libvlc)
+app/           Aplicacion Android — DESACTIVADA en settings.gradle.kts, pendiente de retomar
+installer/     Utilidades de descarga/instalacion
+scripts/       fetch-vlc.ps1 / fetch-vlc.sh: runtime de video para el empaquetado
 ```
 
-### Principios
-- **Clean Architecture**: Separación clara de capas (Data, Domain, Presentation)
-- **MVVM + Repository**: ViewModels con StateFlow, Repository para acceso a datos
-- **Hilt DI**: Inyección de dependencias en toda la app
-- **Room + Coroutines**: Persistencia reactiva con Flow
-- **Jetpack Compose**: UI declarativa y reactiva
+La lógica de dominio vive en `shared/`, así que Android reutilizará el mismo
+parser, el mismo cliente Xtream y el mismo repositorio cuando se reactive.
 
-## 🚀 Comenzando
+## Compilar
 
-### Requisitos
-- Android Studio Koala (2024.1.1) o superior
-- JDK 17
-- Android SDK 34
-- Dispositivo/Emulador Android 5.0+ (API 21+)
-
-### Clonar y compilar
-```bash
-git clone https://github.com/chanmailbot-dotcom/IPTV_Family.git
-cd IPTV_Family
-./gradlew assembleDebug
-```
-
-### Ejecutar tests
-```bash
-./gradlew testDebugUnitTest
-```
-
-### Linting (Detekt)
-```bash
-./gradlew detekt
-```
-
-## 📱 Uso
-
-### Añadir lista M3U (URL)
-1. Abre la app → Botón flotante "+" 
-2. Selecciona "M3U URL"
-3. Introduce nombre y URL de la lista
-4. Pulsa "Guardar"
-
-### Añadir lista Xtream Codes
-1. Abre la app → Botón flotante "+"
-2. Selecciona "Xtream Codes"
-3. Introduce: Nombre, URL del panel, Usuario, Contraseña
-4. Pulsa "Guardar" (se validará la conexión)
-
-### Añadir archivo M3U local
-1. Selecciona "Archivo M3U"
-2. Elige el archivo `.m3u` o `.m3u8` de tu almacenamiento
-
-## 🧪 Testing
+Requiere **JDK 17**.
 
 ```bash
-# Unit tests
-./gradlew testDebugUnitTest
-
-# Instrumented tests (requiere dispositivo/emulador)
-./gradlew connectedAndroidTest
-
-# Generar reporte de cobertura
-./gradlew jacocoTestReport
+./gradlew :shared:desktopTest :composeApp:desktopTest   # tests
+./gradlew :composeApp:run                               # arrancar en local
+./gradlew :composeApp:createDistributable               # imagen de la app, sin instalador
 ```
 
-## 📦 Build Release
+Para ejecutar en local hace falta libvlc en el sistema:
+`sudo apt-get install vlc` en Linux, o instalar VLC en Windows/macOS.
+El instalador que produce el CI ya lo lleva incluido.
 
-```bash
-# Debug APK
-./gradlew assembleDebug
+### Instalador de Windows (MSI / EXE)
 
-# Release APK (requiere keystore configurado)
-./gradlew assembleRelease
+`jpackage` **no cruza plataformas**: el MSI solo se construye desde Windows.
+
+- **Por CI (recomendado):** un push a `master` dispara el job `windows`,
+  que descarga VLC, genera MSI y EXE y los publica en un GitHub Release.
+- **A mano en Windows:** JDK 17 y [WiX 3.11](https://github.com/wixtoolset/wix3/releases)
+  en el `PATH`, y luego:
+
+```powershell
+.\scripts\fetch-vlc.ps1
+.\gradlew :composeApp:packageMsi
 ```
 
-## 🔧 Configuración de desarrollo
+El resultado queda en `composeApp\build\compose\binaries\main\msi\`.
 
-### Variables de entorno para CI/CD
-En GitHub Secrets configurar:
-- `KEYSTORE_BASE64` - Keystore en base64 para firmar releases
-- `KEYSTORE_PASSWORD` - Password del keystore
-- `KEY_ALIAS` - Alias de la clave
-- `KEY_PASSWORD` - Password de la clave
+## Pendiente
 
-### Detekt Baseline
-```bash
-./gradlew detektBaseline
-```
+- **EPG**: `XmltvParser` ya está en `shared` pero no está conectado a la UI, y
+  `Playlist` todavía no tiene un campo para la URL XMLTV.
+- **Android TV / Fire TV**: `:app` está desactivado. Hay que añadirle el plugin
+  de compilador de Compose, migrarlo a consumir `shared`, y darle navegación por
+  D-pad y reproducción con Media3.
 
-## 📄 Licencia
+Ver [PLAN.md](PLAN.md) para el detalle.
 
-MIT License - ver [LICENSE](LICENSE) para detalles.
+## Licencia
 
-## 🙏 Agradecimientos
-
-- [IBO Player](https://iboplayer.com) por la inspiración de UI/UX
-- [ExoPlayer/Media3](https://exoplayer.dev) por el motor de reproducción
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) por el toolkit de UI
-- [Hilt](https://dagger.dev/hilt) por la inyección de dependencias
-- [Room](https://developer.android.com/jetpack/androidx/releases/room) por la persistencia
+MIT — ver [LICENSE](LICENSE).
 
 ---
 
-**Nota**: Esta app NO incluye contenido IPTV. El usuario debe proporcionar sus propias listas M3U o credenciales Xtream Codes de su proveedor de servicios IPTV.
+**Nota**: esta aplicación no incluye ningún contenido. Necesitas tu propia lista
+M3U o tus credenciales Xtream Codes de tu proveedor.

@@ -45,10 +45,16 @@ class AppState(
 
     val selectedPlaylist: Playlist? get() = playlists.find { it.id == selectedPlaylistId }
 
-    suspend fun loadAll() = withContext(Dispatchers.IO) {
-        playlists = repository.loadPlaylists()
-        settings = repository.loadSettings()
-        favorites = repository.loadFavorites()
+    suspend fun loadAll() {
+        withContext(Dispatchers.IO) {
+            playlists = repository.loadPlaylists()
+            settings = repository.loadSettings()
+            favorites = repository.loadFavorites()
+        }
+        // Reabrir la lista que estaba en uso; si no hay, la primera disponible.
+        val restore = settings.selectedPlaylistId?.takeIf { id -> playlists.any { it.id == id } }
+            ?: playlists.firstOrNull()?.id
+        if (restore != null) selectPlaylist(restore)
     }
 
     private fun newId(): String =
@@ -113,6 +119,9 @@ class AppState(
     suspend fun selectPlaylist(id: String?) {
         selectedPlaylistId = id
         error = null
+        if (settings.selectedPlaylistId != id) {
+            mutateSettings { copy(selectedPlaylistId = id) }
+        }
         val pl = playlists.find { it.id == id }
         if (pl == null) {
             channels = emptyList()
@@ -189,10 +198,7 @@ class AppState(
     }
 
     fun channelsFor(categoryId: String): List<Channel> =
-        when (categoryId) {
-            null, "all" -> channels
-            else -> channels.filter { it.group == categoryId }
-        }
+        if (categoryId == "all") channels else channels.filter { it.group == categoryId }
 
     fun isFavorite(channelId: String): Boolean =
         favorites.any { it.channelId == channelId && it.playlistId == selectedPlaylistId }

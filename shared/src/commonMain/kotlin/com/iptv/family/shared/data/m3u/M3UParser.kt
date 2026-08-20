@@ -20,6 +20,8 @@ class M3UParser {
         val channels = mutableListOf<Channel>()
         val categoriesMap = mutableMapOf<String, MutableList<String>>()
 
+        val usedIds = mutableSetOf<String>()
+
         var currentExtInf: ExtInfData? = null
         var extraGroup: String? = null
 
@@ -46,8 +48,13 @@ class M3UParser {
                             ?: extraGroup?.takeIf { it.isNotBlank() }
                             ?: "General"
 
+                        // tvg-id se repite o falta en listas reales; el id debe ser unico
+                        // porque las LazyColumn lo usan como key y los favoritos lo referencian.
+                        val baseId = extInf.tvgId ?: extInf.tvgName ?: url
+                        val id = if (usedIds.add(baseId)) baseId else "$baseId#${channels.size}"
+
                         val channel = Channel(
-                            id = extInf.tvgId ?: (extInf.tvgName ?: url.hashCode().toString()),
+                            id = id,
                             name = extInf.name,
                             url = url,
                             logoUrl = extInf.tvgLogo,
@@ -66,7 +73,7 @@ class M3UParser {
 
         val categories = categoriesMap.map { (name, channelIds) ->
             Category(
-                id = name.hashCode().toString(),
+                id = name,
                 name = name,
                 type = inferType(name),
                 channels = channelIds

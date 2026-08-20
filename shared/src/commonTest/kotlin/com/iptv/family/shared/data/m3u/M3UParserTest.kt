@@ -77,6 +77,38 @@ class M3UParserTest {
     }
 
     @Test
+    fun channel_ids_are_unique_even_when_tvg_id_repeats() {
+        val content = """
+            #EXTM3U
+            #EXTINF:-1 tvg-id="DUP" group-title="A",Canal A
+            http://x/a.m3u8
+            #EXTINF:-1 tvg-id="DUP" group-title="A",Canal B
+            http://x/b.m3u8
+            #EXTINF:-1 group-title="A",Canal C
+            http://x/c.m3u8
+        """.trimIndent()
+
+        val result = parser.parse(content)
+
+        assertEquals(3, result.channels.size)
+        assertEquals(3, result.channels.map { it.id }.toSet().size, "Los ids deben ser unicos")
+    }
+
+    @Test
+    fun category_id_matches_channel_group_so_filtering_works() {
+        val content = """
+            #EXTM3U
+            #EXTINF:-1 group-title="Deportes",ESPN
+            http://x/espn.m3u8
+        """.trimIndent()
+
+        val result = parser.parse(content)
+        val deportes = result.categories.single()
+
+        assertEquals(deportes.id, result.channels.single().group)
+    }
+
+    @Test
     fun assigns_fallback_name_and_id_when_missing() {
         val content = "#EXTM3U\n#EXTINF:-1,\nhttp://x/stream.m3u8".trimIndent()
         val result = parser.parse(content)

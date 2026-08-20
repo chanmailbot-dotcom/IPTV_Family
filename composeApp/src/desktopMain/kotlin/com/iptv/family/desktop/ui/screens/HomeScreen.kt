@@ -2,126 +2,255 @@ package com.iptv.family.desktop.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberSnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
+import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomeScreen(appState: AppState, scope: kotlinx.coroutines.CoroutineScope, onAddClick: () -> Unit) {
-    val snack = remember { mutableStateOf<SnackbarHostState?>(null) }
-    val host = snack.value ?: rememberSnackbarHostState().also { snack.value = it }
-    val scaffoldState = host
-    val playlists = appState.playlists
-    Box(Modifier.fillMaxSize()) {
-        if (playlists.isEmpty()) {
-            EmptyHome(onAddClick)
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
-                items(playlists, key = { it.id }) { pl ->
-                    PlaylistRow(
-                        playlist = pl,
-                        isSelected = appState.selectedPlaylistId == pl.id,
-                        onSelect = { scope.launch { appState.selectPlaylist(pl.id) } },
-                        onRefresh = { scope.launch { appState.refresh() } },
-                        onDelete = { scope.launch { appState.deletePlaylist(pl.id) } },
-                    )
-                }
+fun HomeScreen(
+    appState: AppState,
+    scope: CoroutineScope,
+    onAddClick: () -> Unit,
+    onOpenChannels: () -> Unit,
+) {
+    var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Mis listas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Añade tu lista M3U o tus datos de Xtream Codes y empieza a ver la tele.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Button(onAddClick) {
+                Icon(Icons.Rounded.Add, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Añadir lista")
             }
         }
-        FloatingActionButton(
-            onClick = onAddClick,
-            containerColor = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) { Icon(Icons.Default.Add, contentDescription = "Añadir", tint = Color.White) }
-    }
-}
 
-@Composable
-private fun EmptyHome(onAddClick: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Column(
-            Modifier.align(Alignment.Center).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Aún no hay listas.", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Text("Añade una lista M3U o conéctate a un panel Xtream Codes para empezar.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground.copy(0.6f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            TextButton(onClick = onAddClick) { Text("Añadir lista") }
+        appState.error?.let { message ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.errorContainer, MaterialTheme.shapes.medium)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    message,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton({ scope.launch { appState.refresh() } }) { Text("Reintentar") }
+            }
+        }
+
+        if (appState.playlists.isEmpty()) {
+            EmptyState(onAddClick)
+            return@Column
+        }
+
+        appState.playlists.forEach { playlist ->
+            PlaylistCard(
+                playlist = playlist,
+                isSelected = playlist.id == appState.selectedPlaylistId,
+                channelCount = if (playlist.id == appState.selectedPlaylistId) appState.channels.size else null,
+                isLoading = appState.isLoading && playlist.id == appState.selectedPlaylistId,
+                onSelect = { scope.launch { appState.selectPlaylist(playlist.id) } },
+                onOpen = onOpenChannels,
+                onRefresh = { scope.launch { appState.refresh() } },
+                onDelete = { pendingDelete = playlist },
+            )
         }
     }
+
+    pendingDelete?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Eliminar lista") },
+            text = { Text("¿Seguro que quieres eliminar «${playlist.name}»? Sus favoritos se mantienen.") },
+            confirmButton = {
+                Button({
+                    scope.launch { appState.deletePlaylist(playlist.id) }
+                    pendingDelete = null
+                }) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancelar") } },
+        )
+    }
 }
 
 @Composable
-private fun PlaylistRow(
-    playlist: com.iptv.family.shared.model.Playlist,
+private fun PlaylistCard(
+    playlist: Playlist,
     isSelected: Boolean,
+    channelCount: Int?,
+    isLoading: Boolean,
     onSelect: () -> Unit,
+    onOpen: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val iconTint = when (playlist.type) {
-        SourceType.M3U_URL, SourceType.M3U_FILE -> MaterialTheme.colorScheme.primary
-        SourceType.XTREAM -> MaterialTheme.colorScheme.secondary
-    }
-    ListItem(
-        headlineText = { Text(playlist.name) },
-        supportingText = { Text(playlist.type.name + if (playlist.isActive) " • activa" else "") },
-        leadingContent = {
-            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = iconTint, modifier = Modifier.size(32.dp))
-        },
-        trailingContent = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                IconButton(onRefresh) { Icon(Icons.Default.Refresh, contentDescription = "Actualizar") }
-                IconButton(onSelect) { Icon(Icons.Default.Select, contentDescription = "Seleccionar") }
-                IconButton(onDelete) { Icon(Icons.Default.Delete, contentDescription = "Eliminar") }
-            }
-        },
-        modifier = Modifier
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+
+    Row(
+        Modifier
             .fillMaxWidth()
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(0.12f) else Color.Transparent)
-            .clickable(onSelect),
-    )
+            .background(
+                when {
+                    isSelected -> MaterialTheme.colorScheme.primaryContainer
+                    hovered -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    else -> MaterialTheme.colorScheme.surfaceContainer
+                },
+                MaterialTheme.shapes.large,
+            )
+            .hoverable(interaction)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable { if (isSelected) onOpen() else onSelect() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.shapes.medium),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                when (playlist.type) {
+                    SourceType.M3U_URL -> Icons.Rounded.Link
+                    SourceType.M3U_FILE -> Icons.Rounded.Folder
+                    SourceType.XTREAM -> Icons.Rounded.Person
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        Column(Modifier.weight(1f)) {
+            Text(playlist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(
+                buildString {
+                    append(playlist.type.readableName)
+                    if (channelCount != null) append(" · $channelCount canales")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+
+        if (isLoading) {
+            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+        } else if (isSelected) {
+            Button(onOpen) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(4.dp))
+                Text("Ver canales")
+            }
+            IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, contentDescription = "Actualizar lista") }
+        }
+
+        IconButton(onDelete) {
+            Icon(
+                Icons.Rounded.Delete,
+                contentDescription = "Eliminar lista",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
+
+@Composable
+private fun EmptyState(onAddClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.large)
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            Icons.Rounded.Add,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(40.dp),
+        )
+        Text("Todavía no hay ninguna lista", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "Tu proveedor te da o una URL que acaba en .m3u, o un panel con usuario y contraseña " +
+                "(Xtream Codes). Sirven las dos.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        Button(onAddClick) {
+            Icon(Icons.Rounded.Add, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("Añadir mi primera lista")
+        }
+    }
+}
+
+private val SourceType.readableName: String
+    get() = when (this) {
+        SourceType.M3U_URL -> "Lista M3U por URL"
+        SourceType.M3U_FILE -> "Archivo M3U local"
+        SourceType.XTREAM -> "Xtream Codes"
+    }
