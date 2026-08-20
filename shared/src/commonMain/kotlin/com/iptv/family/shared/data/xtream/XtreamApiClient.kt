@@ -88,8 +88,8 @@ class XtreamApiClient(
                     channelId = epg.stringOrNull("channel_id") ?: "",
                     title = epg.stringOrNull("title") ?: "",
                     description = epg.stringOrNull("description"),
-                    startTime = epg.longOrNull("start") ?: 0L,
-                    endTime = epg.longOrNull("end") ?: 0L,
+                    startTime = (epg.longOrNull("start") ?: 0L) * 1000L,
+                    endTime = (epg.longOrNull("end") ?: 0L) * 1000L,
                     category = epg.stringOrNull("category"),
                     iconUrl = epg.stringOrNull("icon")
                 )

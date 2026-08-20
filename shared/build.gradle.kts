@@ -20,6 +20,10 @@ kotlin {
             }
         }
 
+        val desktopMain by getting {
+            // Parser XMLTV (JDK DOM) y utilidades solo-escritorio
+        }
+
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
