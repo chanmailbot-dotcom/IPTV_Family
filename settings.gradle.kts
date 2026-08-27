@@ -16,7 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "IPTV_Family"
 include(":shared")
-// include(":app") // se rehabilita al retomar Android (requiere Compose compiler plugin)
+include(":app") // Android / Fire TV / Android TV — consume :shared
 include(":composeApp") // escritorio (desktop) — consume :shared
 
 // Hilt plugin applied to all modules

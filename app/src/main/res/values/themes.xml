@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base application theme -->
-    <style name="Theme.IPTVFamily" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <!-- Primary brand color -->
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/secondary</item>
-
+    <!-- Base application theme: la UI real la pinta Compose (theme/Theme.kt);
+         esto solo fija los colores de la ventana antes de que Compose arranque. -->
+    <style name="Theme.IPTVFamily" parent="android:Theme.Material.NoActionBar">
         <!-- Status bar color -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>

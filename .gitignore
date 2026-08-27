@@ -10,6 +10,7 @@ gradle/wrapper/dists/
 .vscode/
 *.swp
 .DS_Store
+local.properties
 
 # Kotlin
 *.ktsession
