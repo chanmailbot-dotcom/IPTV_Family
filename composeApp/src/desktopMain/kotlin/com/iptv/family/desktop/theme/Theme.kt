@@ -6,16 +6,20 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val Accent = Color(0xFF5B8DEF)
-private val AccentDark = Color(0xFF2F6BD8)
+// Mismos tonos que el icono de la app (badge degradado indigo -> verde azulado):
+// mantiene una sola identidad de marca entre el icono, escritorio y Android.
+private val Accent = Color(0xFF6C8CFF)
+private val AccentDark = Color(0xFF3D5BDB)
+private val BrandTeal = Color(0xFF00D0B0)
+private val BrandTealDark = Color(0xFF00937B)
 
 private val Dark = darkColorScheme(
     primary = Accent,
     onPrimary = Color(0xFF06111F),
     primaryContainer = Color(0xFF1B3A63),
     onPrimaryContainer = Color(0xFFD3E3FF),
-    secondary = Color(0xFF22D3EE),
-    onSecondary = Color(0xFF04222A),
+    secondary = BrandTeal,
+    onSecondary = Color(0xFF04221C),
     tertiary = Color(0xFFF472B6),
     onTertiary = Color(0xFF2B0517),
     background = Color(0xFF0B0E14),
@@ -40,7 +44,7 @@ private val Light = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = Color(0xFFD9E5FF),
     onPrimaryContainer = Color(0xFF0B2A55),
-    secondary = Color(0xFF0E7490),
+    secondary = BrandTealDark,
     onSecondary = Color.White,
     tertiary = Color(0xFFBE185D),
     onTertiary = Color.White,

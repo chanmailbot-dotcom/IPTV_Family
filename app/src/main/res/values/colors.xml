@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Colores principales estilo IBO Player -->
-    <color name="primary">#1E88E5</color>
-    <color name="primary_dark">#1565C0</color>
-    <color name="primary_light">#64B5F6</color>
+    <!-- Colores de marca: mismos tonos que el icono y el tema de escritorio. -->
+    <color name="primary">#6C8CFF</color>
+    <color name="primary_dark">#3D5BDB</color>
+    <color name="primary_light">#A6B8FF</color>
     <color name="primary_container">#BBDEFB</color>
     <color name="on_primary">#FFFFFF</color>
     <color name="on_primary_container">#001D3D</color>
