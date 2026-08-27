@@ -42,6 +42,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.iptv.family.desktop.player.FilePicker
 import com.iptv.family.desktop.player.VlcController
+import com.iptv.family.desktop.remote.RemoteWebServer
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.desktop.theme.AppTheme
 import com.iptv.family.desktop.theme.AppThemeMode
@@ -53,6 +54,7 @@ import com.iptv.family.desktop.ui.screens.PlayerScreen
 import com.iptv.family.desktop.ui.screens.SettingsScreen
 import com.iptv.family.shared.data.repository.LibraryRepository
 import com.iptv.family.shared.data.store.FileKeyValueStore
+import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Channel
 import com.iptv.family.shared.model.ThemeType
 import kotlinx.coroutines.launch
@@ -71,13 +73,30 @@ fun main() = application {
 
     val appState = remember {
         val dir = File(System.getProperty("user.home"), ".iptv-family").apply { mkdirs() }
+        AppLog.init(File(dir, "logs"))
         AppState(LibraryRepository(FileKeyValueStore(dir)))
     }
     // Un unico reproductor por modo de video: crear uno por canal filtra memoria nativa.
     // Cambiar el modo en Ajustes obliga a construir otro, y a soltar el viejo.
     val compatibilityMode = appState.settings.videoCompatibilityMode
     val controller = remember(compatibilityMode) {
-        runCatching { VlcController(compatibilityMode) }.getOrNull()
+        runCatching { VlcController(compatibilityMode) }
+            .onFailure { AppLog.e("Main", "No se pudo crear VlcController", it) }
+            .getOrNull()
+    }
+
+    val remoteScope = rememberCoroutineScope()
+    val remoteServer = remember { RemoteWebServer(appState, controller, remoteScope) }
+    val webServerEnabled = appState.settings.enableWebServer
+    val webServerPort = appState.settings.webServerPort
+    DisposableEffect(webServerEnabled, webServerPort) {
+        if (webServerEnabled) {
+            runCatching { remoteServer.start(webServerPort) }
+                .onFailure { AppLog.e("Main", "No se pudo iniciar el servidor web", it) }
+        } else {
+            remoteServer.stop()
+        }
+        onDispose { remoteServer.stop() }
     }
 
     var destination by remember { mutableStateOf(Destination.HOME) }
@@ -118,10 +137,15 @@ fun main() = application {
 
         // Solo navega: PlayerScreen arranca el stream cuando su superficie existe.
         fun play(channel: Channel, list: List<Channel>) {
+            AppLog.d("Main", "Usuario pide reproducir '${channel.name}' (${AppLog.redactUrl(channel.url)})")
             playing = channel
             zapList = list
             destination = Destination.PLAYER
         }
+
+        // El servidor remoto reusa siempre la misma funcion play() que la UI local,
+        // asi que un cambio de canal desde el navegador se refleja igual que uno local.
+        remoteServer.onRemotePlayRequest = { channel -> play(channel, appState.channels) }
 
         AppTheme(mode) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

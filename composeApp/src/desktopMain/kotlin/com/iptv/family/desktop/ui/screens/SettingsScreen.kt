@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,11 +29,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import com.iptv.family.desktop.player.VlcNative
+import com.iptv.family.desktop.remote.RemoteAuth
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.shared.model.ThemeType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 @Composable
 fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
@@ -126,6 +132,76 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
             }
         }
 
+        Section("Servidor web") {
+            val clipboard = LocalClipboardManager.current
+            ToggleRow(
+                title = "Activar servidor web",
+                subtitle = "Permite ver y cambiar de canal desde el navegador de cualquier dispositivo " +
+                    "de tu red (o de internet, exponiendo el puerto con algo como ngrok).",
+                checked = settings.enableWebServer,
+            ) { enabled ->
+                scope.launch {
+                    if (enabled && settings.webServerToken.isNullOrBlank()) {
+                        appState.mutateSettings {
+                            copy(enableWebServer = true, webServerToken = RemoteAuth.generateToken())
+                        }
+                    } else {
+                        appState.mutateSettings { copy(enableWebServer = enabled) }
+                    }
+                }
+            }
+
+            var portText by remember(settings.webServerPort) { mutableStateOf(settings.webServerPort.toString()) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = { if (it.length <= 5 && it.all(Char::isDigit)) portText = it },
+                    label = { Text("Puerto") },
+                    singleLine = true,
+                    modifier = Modifier.width(140.dp),
+                )
+                Button(onClick = {
+                    val port = portText.toIntOrNull()?.coerceIn(1024, 65535) ?: settings.webServerPort
+                    scope.launch { appState.mutateSettings { copy(webServerPort = port) } }
+                }) { Text("Guardar puerto") }
+            }
+
+            if (settings.enableWebServer && !settings.webServerToken.isNullOrBlank()) {
+                Text(
+                    "Token de acceso (pídelo en el navegador remoto la primera vez):",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(settings.webServerToken.orEmpty(), style = MaterialTheme.typography.bodyLarge)
+                    TextButton({ clipboard.setText(AnnotatedString(settings.webServerToken.orEmpty())) }) { Text("Copiar") }
+                    TextButton({
+                        scope.launch { appState.mutateSettings { copy(webServerToken = RemoteAuth.generateToken()) } }
+                    }) { Text("Regenerar") }
+                }
+
+                Text(
+                    "Enlaces con el token ya incluido — ábrelos directamente en el móvil " +
+                        "(por WhatsApp, notas, etc.) y entras sin teclear nada:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                localLanAddresses().forEach { ip ->
+                    val link = "http://$ip:${settings.webServerPort}/?token=${settings.webServerToken}"
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(link, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton({ clipboard.setText(AnnotatedString(link)) }) { Text("Copiar enlace") }
+                    }
+                }
+                Text(
+                    "Para verlo fuera de casa, lanza ngrok apuntando a este puerto (ngrok http ${settings.webServerPort}) " +
+                        "y añade \"/?token=${settings.webServerToken}\" a la URL que te dé.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Section("Información") {
             InfoRow("Motor de vídeo", if (VlcNative.isAvailable) "libvlc detectado" else "no encontrado")
             InfoRow("Datos guardados en", "${System.getProperty("user.home")}/.iptv-family")
@@ -171,6 +247,15 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
+
+private fun localLanAddresses(): List<String> = runCatching {
+    NetworkInterface.getNetworkInterfaces().asSequence()
+        .filter { it.isUp && !it.isLoopback && !it.isVirtual }
+        .flatMap { it.inetAddresses.asSequence() }
+        .filterIsInstance<Inet4Address>()
+        .map { it.hostAddress }
+        .toList()
+}.getOrDefault(emptyList())
 
 @Composable
 private fun InfoRow(label: String, value: String) {

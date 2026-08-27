@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.iptv.family.shared.data.repository.LibraryRepository
 import com.iptv.family.shared.data.store.KeyValueStore
+import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
@@ -65,6 +66,7 @@ class AppState(
     // ------------------------------------------------------------------
 
     suspend fun addM3uUrl(name: String, url: String) {
+        AppLog.d("AppState", "addM3uUrl: name='$name' url=${AppLog.redactUrl(url)}")
         require(name.isNotBlank()) { "El nombre es obligatorio" }
         val pl = Playlist(
             id = newId(),
@@ -80,6 +82,7 @@ class AppState(
     }
 
     suspend fun addXtream(name: String, url: String, user: String, pass: String) {
+        AppLog.d("AppState", "addXtream: name='$name' url=${AppLog.redactUrl(url)} user='$user'")
         require(name.isNotBlank()) { "El nombre es obligatorio" }
         require(url.isNotBlank() && user.isNotBlank()) { "URL y usuario son obligatorios" }
         val pl = Playlist(
@@ -98,6 +101,7 @@ class AppState(
     }
 
     suspend fun addM3uFile(name: String, content: String) {
+        AppLog.d("AppState", "addM3uFile: name='$name' ${content.length} bytes")
         val id = newId()
         repository.storeFileContent(id, content)
         val pl = Playlist(
@@ -169,6 +173,7 @@ class AppState(
     private fun applyResult(result: LibraryRepository.ChannelsResult) {
         when (result) {
             is LibraryRepository.ChannelsResult.Ok -> {
+                AppLog.d("AppState", "applyResult: ${result.channels.size} canales cargados")
                 channels = result.channels.map { ch ->
                     if (isFavorite(ch.id)) ch.copy(isFavorite = true) else ch
                 }
@@ -176,6 +181,7 @@ class AppState(
                 normalizeCategories()
             }
             is LibraryRepository.ChannelsResult.Error -> {
+                AppLog.w("AppState", "applyResult: ${result.message}")
                 error = result.message
                 channels = emptyList()
                 categories = emptyList()

@@ -3,12 +3,15 @@ package com.iptv.family.desktop.player
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.iptv.family.shared.log.AppLog
 import com.sun.jna.NativeLibrary
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
+import uk.co.caprica.vlcj.log.LogLevel
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
 import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent
+import uk.co.caprica.vlcj.player.component.MediaPlayerComponent
 import java.awt.Component
 import java.io.File
 
@@ -24,15 +27,20 @@ object VlcNative {
     val isAvailable: Boolean by lazy { discover() }
 
     private fun discover(): Boolean = try {
-        bundledDir()?.let { dir ->
+        val dir = bundledDir()
+        AppLog.d("Vlc", "discover: bundledDir=$dir")
+        dir?.let {
             // El nombre de la libreria cambia por plataforma; registramos ambos.
-            NativeLibrary.addSearchPath("libvlc", dir)
-            NativeLibrary.addSearchPath("vlc", dir)
+            NativeLibrary.addSearchPath("libvlc", it)
+            NativeLibrary.addSearchPath("vlc", it)
             // libvlc busca su carpeta `plugins` junto al binario.
-            System.setProperty("VLC_PLUGIN_PATH", File(dir, "plugins").absolutePath)
+            System.setProperty("VLC_PLUGIN_PATH", File(it, "plugins").absolutePath)
         }
-        NativeDiscovery().discover()
+        val found = NativeDiscovery().discover()
+        AppLog.d("Vlc", "discover: libvlc encontrado=$found")
+        found
     } catch (e: Throwable) {
+        AppLog.e("Vlc", "discover: excepción", e)
         false
     }
 
@@ -64,6 +72,9 @@ class VlcController(compatibilityMode: Boolean = false) {
      */
     val component: Component =
         if (useCallbackMode(compatibilityMode)) CallbackMediaPlayerComponent() else EmbeddedMediaPlayerComponent()
+
+    /** [component] siempre implementa esto; solo su tipo AWT concreto varia. */
+    private val mpComponent: MediaPlayerComponent = component as MediaPlayerComponent
 
     private val player: MediaPlayer = when (val c = component) {
         is CallbackMediaPlayerComponent -> c.mediaPlayer()
@@ -98,19 +109,51 @@ class VlcController(compatibilityMode: Boolean = false) {
             player.audio().isMute = value
         }
 
+    /**
+     * Ultimas lineas de log nativas de libvlc (WARNING/ERROR), para poder mostrar la
+     * causa real de un fallo: el evento `error()` de vlcj no trae motivo, solo avisa
+     * de que algo fue mal.
+     */
+    private val recentNativeLog = ArrayDeque<String>()
+    private val nativeLog = runCatching { mpComponent.mediaPlayerFactory().application().newLog() }.getOrNull()
+
     init {
+        AppLog.d("Vlc", "nativeLog disponible=${nativeLog != null}")
+        nativeLog?.apply {
+            setLevel(LogLevel.WARNING)
+            addLogListener { level, module, _, _, _, _, _, message ->
+                if (level == LogLevel.WARNING || level == LogLevel.ERROR) {
+                    // Cada linea WARNING/ERROR de libvlc va al log completo (no solo la
+                    // usada para el mensaje de error): la causa real suele estar unas
+                    // lineas antes del evento error() (p.ej. fallo de conexion, 403...).
+                    AppLog.w("VlcNative", "[$module] $message")
+                    synchronized(recentNativeLog) {
+                        recentNativeLog.addLast(message)
+                        if (recentNativeLog.size > 5) recentNativeLog.removeFirst()
+                    }
+                }
+            }
+        }
+
         player.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
+            override fun opening(mp: MediaPlayer) {
+                AppLog.d("Vlc", "opening: ${AppLog.redactUrl(currentUrl.orEmpty())}")
+            }
+
             override fun playing(mp: MediaPlayer) {
+                AppLog.d("Vlc", "playing: ${AppLog.redactUrl(currentUrl.orEmpty())}")
                 isPlaying = true
                 isBuffering = false
                 error = null
             }
 
             override fun paused(mp: MediaPlayer) {
+                AppLog.d("Vlc", "paused")
                 isPlaying = false
             }
 
             override fun stopped(mp: MediaPlayer) {
+                AppLog.d("Vlc", "stopped")
                 isPlaying = false
                 isBuffering = false
             }
@@ -119,10 +162,20 @@ class VlcController(compatibilityMode: Boolean = false) {
                 isBuffering = newCache < 100f
             }
 
+            override fun finished(mp: MediaPlayer) {
+                AppLog.w("Vlc", "finished (el stream terminó solo, sin error explícito)")
+            }
+
             override fun error(mp: MediaPlayer) {
                 isPlaying = false
                 isBuffering = false
-                error = "No se pudo abrir el canal. Comprueba que la lista sigue activa."
+                val detail = synchronized(recentNativeLog) { recentNativeLog.lastOrNull() }
+                AppLog.e("Vlc", "error al reproducir ${AppLog.redactUrl(currentUrl.orEmpty())}: $detail")
+                error = if (detail != null) {
+                    "No se pudo abrir el canal: $detail"
+                } else {
+                    "No se pudo abrir el canal. Comprueba que la lista sigue activa."
+                }
             }
         })
         player.audio().setVolume(volumeState)
@@ -139,6 +192,10 @@ class VlcController(compatibilityMode: Boolean = false) {
      */
     fun play(url: String, networkCachingMs: Int = 15_000, hardwareDecoding: Boolean = true) {
         if (url.isBlank()) return
+        AppLog.d(
+            "Vlc",
+            "play: ${AppLog.redactUrl(url)} (surfaceReady=$isSurfaceReady, caching=${networkCachingMs}ms, hw=$hardwareDecoding)"
+        )
         error = null
         isBuffering = true
         currentUrl = url
@@ -146,6 +203,7 @@ class VlcController(compatibilityMode: Boolean = false) {
         if (!hardwareDecoding) options += ":avcodec-hw=none"
         runCatching { player.media().play(url, *options.toTypedArray()) }
             .onFailure {
+                AppLog.e("Vlc", "play: fallo al invocar player.media().play()", it)
                 isBuffering = false
                 error = "No se pudo iniciar la reproducción: ${it.message ?: it::class.simpleName}"
             }
@@ -179,6 +237,7 @@ class VlcController(compatibilityMode: Boolean = false) {
         if (released) return
         released = true
         runCatching { player.controls().stop() }
+        runCatching { nativeLog?.release() }
         runCatching {
             when (val c = component) {
                 is CallbackMediaPlayerComponent -> c.release()
