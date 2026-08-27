@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IPTV Family — control remoto</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="login-screen" class="screen">
+    <div class="login-box">
+      <h1>IPTV Family</h1>
+      <p>Introduce el token de acceso (lo encuentras en Ajustes → Servidor web, en el PC).</p>
+      <input id="token-input" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Token" autocomplete="off" />
+      <button id="login-btn">Entrar</button>
+      <p id="login-error" class="error"></p>
+    </div>
+  </div>
+
+  <div id="app-screen" class="screen hidden">
+    <header>
+      <h1 id="playlist-name">IPTV Family</h1>
+      <input id="search" type="search" placeholder="Buscar canal…" />
+    </header>
+    <main>
+      <section id="player-section">
+        <video id="player" controls playsinline></video>
+        <div id="now-playing">
+          <span id="now-playing-name">Sin reproducir</span>
+          <span id="now-playing-status"></span>
+        </div>
+      </section>
+      <section id="list-section">
+        <div id="categories"></div>
+        <ul id="channels"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

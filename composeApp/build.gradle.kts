@@ -2,6 +2,7 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform") version "2.0.21"
     id("org.jetbrains.compose") version "1.7.1"
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 }
 
 group = "com.iptv.family"
@@ -27,6 +28,17 @@ kotlin {
                 implementation("uk.co.caprica:vlcj:4.8.2")
 
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
+
+                // Servidor web de control remoto (ver "Servidor web" en Ajustes):
+                // motor CIO (puro JVM, sin dependencias nativas, arranque/parada baratos).
+                val ktorVersion = "2.3.12"
+                implementation("io.ktor:ktor-server-core:$ktorVersion")
+                implementation("io.ktor:ktor-server-cio:$ktorVersion")
+                implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+                // Cliente HTTP para el proxy del stream hacia el proveedor.
+                implementation("io.ktor:ktor-client-core:$ktorVersion")
+                implementation("io.ktor:ktor-client-cio:$ktorVersion")
             }
         }
         val desktopTest by getting {
