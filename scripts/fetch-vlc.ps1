@@ -14,7 +14,13 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'   # Write-Progress ralentiza mucho en CI
 
-$base     = 'https://get.videolan.org/vlc/last/win64'
+$discoverBase = 'https://get.videolan.org/vlc/last/win64'
+# get.videolan.org reparte entre mirrors por geoIP: a veces en vez de servir el zip
+# devuelve una pagina HTML de aterrizaje con un meta-refresh a los 5s, sin dar 404 ni
+# error HTTP. Para descubrir la version es inofensivo (solo lista nombres de fichero),
+# pero para el binario usamos el FTP maestro de VideoLAN, que siempre sirve el fichero
+# directo y no hace ese redirect "cortes".
+$downloadBase = 'https://download.videolan.org/pub/videolan/vlc'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $target   = Join-Path $repoRoot 'composeApp\resources\windows-x64\vlc'
 
@@ -27,15 +33,16 @@ $work = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'vlc-download' }
         else { Join-Path $env:TEMP 'vlc-download' }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 
-Write-Host "Buscando la ultima version de VLC en $base"
-$index = Invoke-WebRequest -Uri "$base/" -UseBasicParsing
+Write-Host "Buscando la ultima version de VLC en $discoverBase"
+$index = Invoke-WebRequest -Uri "$discoverBase/" -UseBasicParsing
 $zipName = ([regex]::Matches($index.Content, 'vlc-\d+\.\d+\.\d+-win64\.zip(?!\.)') |
             ForEach-Object { $_.Value } | Sort-Object -Unique | Select-Object -First 1)
-if (-not $zipName) { throw "No se encontro ningun vlc-*-win64.zip en $base" }
+if (-not $zipName) { throw "No se encontro ningun vlc-*-win64.zip en $discoverBase" }
 
 $version = [regex]::Match($zipName, '\d+\.\d+\.\d+').Value
 Write-Host "Version detectada: $version"
 
+$base = "$downloadBase/$version/win64"
 $zip = Join-Path $work $zipName
 Write-Host "Descargando $base/$zipName"
 Invoke-WebRequest -Uri "$base/$zipName" -OutFile $zip -UseBasicParsing
@@ -46,7 +53,16 @@ Write-Host "Descargados $sizeMb MB"
 
 # Verificar la descarga: se ejecuta codigo nativo desde este zip, no basta con confiar en la URL.
 Write-Host 'Verificando sha256'
-$expected = ((Invoke-WebRequest -Uri "$base/$zipName.sha256" -UseBasicParsing).Content -split '\s+')[0].Trim().ToLower()
+# download.videolan.org sirve el .sha256 como application/octet-stream: en Windows
+# PowerShell 5.1, Invoke-WebRequest con -UseBasicParsing devuelve entonces Content
+# como byte[] en vez de string, así que hay que decodificarlo explícitamente.
+$shaResponse = Invoke-WebRequest -Uri "$base/$zipName.sha256" -UseBasicParsing
+$shaText = if ($shaResponse.Content -is [byte[]]) {
+    [System.Text.Encoding]::UTF8.GetString($shaResponse.Content)
+} else {
+    $shaResponse.Content
+}
+$expected = ($shaText -split '\s+')[0].Trim().ToLower()
 $actual   = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
 if ($expected -ne $actual) { throw "sha256 no coincide.`n  esperado: $expected`n  obtenido: $actual" }
 Write-Host "sha256 correcto: $actual"
