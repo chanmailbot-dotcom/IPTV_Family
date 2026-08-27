@@ -3,6 +3,7 @@ package com.iptv.family.shared.data.repository
 import com.iptv.family.shared.data.m3u.M3UParser
 import com.iptv.family.shared.data.store.KeyValueStore
 import com.iptv.family.shared.data.xtream.XtreamApiClient
+import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.Channel
 import com.iptv.family.shared.model.FavoriteChannel
@@ -62,12 +63,18 @@ class LibraryRepository(private val store: KeyValueStore) {
 
     /** Carga canales de un M3U (URL o contenido) o de Xtream Codes. */
     suspend fun buildChannels(playlist: Playlist): ChannelsResult = withContext(Dispatchers.IO) {
-        when (playlist.type) {
+        AppLog.d("Library", "buildChannels: playlist='${playlist.name}' type=${playlist.type}")
+        val result = when (playlist.type) {
             SourceType.M3U_URL -> {
                 try {
-                    val content = fetch(playlist.m3uUrl.orEmpty())
+                    val raw = playlist.m3uUrl.orEmpty().trim()
+                    val url = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "http://$raw"
+                    AppLog.d("Library", "M3U_URL: descargando ${AppLog.redactUrl(url)}")
+                    val content = fetch(url)
+                    AppLog.d("Library", "M3U_URL: ${content.length} bytes descargados")
                     m3uToResult(content)
                 } catch (e: Exception) {
+                    AppLog.e("Library", "M3U_URL: fallo al descargar/parsear", e)
                     ChannelsResult.Error("No se pudo descargar la lista: ${e.message}")
                 }
             }
@@ -75,8 +82,10 @@ class LibraryRepository(private val store: KeyValueStore) {
             SourceType.M3U_FILE -> {
                 try {
                     val content = store.read("file_${playlist.id}.m3u").orEmpty()
+                    AppLog.d("Library", "M3U_FILE: ${content.length} bytes leídos de disco")
                     m3uToResult(content)
                 } catch (e: Exception) {
+                    AppLog.e("Library", "M3U_FILE: fallo al leer/parsear", e)
                     ChannelsResult.Error("No se pudo leer el archivo: ${e.message}")
                 }
             }
@@ -87,16 +96,23 @@ class LibraryRepository(private val store: KeyValueStore) {
                     username = playlist.xtreamUser.orEmpty(),
                     password = playlist.xtreamPass.orEmpty()
                 )
+                AppLog.d("Library", "XTREAM: login en ${AppLog.redactUrl(playlist.xtreamUrl.orEmpty())}")
                 val login = client.login()
                 if (!login.success) {
+                    AppLog.w("Library", "XTREAM: login fallido - ${login.error}")
                     ChannelsResult.Error(login.error ?: "Login Xtream fallido")
                 } else {
+                    AppLog.d("Library", "XTREAM: login ok, status=${login.status} exp=${login.expDate}")
                     try {
                         val groups = mutableMapOf<String, String>()
                         (client.getLiveCategories() + client.getVodCategories() + client.getSeriesCategories())
                             .forEach { groups[it.id] = it.name }
 
-                        val channels = client.getLiveStreams() + client.getVodStreams() + client.getSeriesStreams()
+                        val live = client.getLiveStreams()
+                        val vod = client.getVodStreams()
+                        val series = client.getSeriesStreams()
+                        AppLog.d("Library", "XTREAM: live=${live.size} vod=${vod.size} series=${series.size}")
+                        val channels = live + vod + series
                         ChannelsResult.Ok(
                             channels = channels,
                             categories = channels.map { ch ->
@@ -109,11 +125,36 @@ class LibraryRepository(private val store: KeyValueStore) {
                             }.distinct()
                         )
                     } catch (e: Exception) {
+                        AppLog.e("Library", "XTREAM: fallo cargando streams", e)
                         ChannelsResult.Error("Error cargando Xtream: ${e.message}")
                     }
                 }
             }
         }
+        when (result) {
+            is ChannelsResult.Ok -> AppLog.d(
+                "Library",
+                "buildChannels: OK ${result.channels.size} canales, ${result.categories.size} categorías"
+            )
+            is ChannelsResult.Error -> AppLog.w("Library", "buildChannels: ERROR ${result.message}")
+        }
+        result
+    }
+
+    /**
+     * Episodios reproducibles de una serie Xtream (ver comentario en
+     * [XtreamApiClient.getSeriesEpisodes]: el `series_id` de la lista de
+     * series NO es reproducible por si mismo, hace falta esta llamada aparte).
+     * Solo tiene sentido para playlists Xtream; para M3U devuelve vacio.
+     */
+    suspend fun getSeriesEpisodes(playlist: Playlist, seriesId: String): List<Channel> {
+        if (playlist.type != SourceType.XTREAM) return emptyList()
+        val client = XtreamApiClient(
+            baseUrl = playlist.xtreamUrl.orEmpty(),
+            username = playlist.xtreamUser.orEmpty(),
+            password = playlist.xtreamPass.orEmpty()
+        )
+        return client.getSeriesEpisodes(seriesId)
     }
 
     /**
@@ -174,6 +215,11 @@ class LibraryRepository(private val store: KeyValueStore) {
     // ------------------------------------------------------------------
 
     private fun m3uToResult(content: String): ChannelsResult {
+        if (!content.contains("#EXTM3U") && !content.contains("#EXTINF")) {
+            return ChannelsResult.Error(
+                "La URL no devolvió una lista M3U (¿la contraseña o el enlace caducó?)."
+            )
+        }
         val parsed = m3uParser.parse(content)
         return ChannelsResult.Ok(
             channels = parsed.channels,
@@ -181,17 +227,35 @@ class LibraryRepository(private val store: KeyValueStore) {
         )
     }
 
-    private fun fetch(url: String): String {
+    /**
+     * HttpURLConnection sigue redirecciones automaticamente solo si el protocolo no
+     * cambia: muchos paneles M3U dan una URL http que en realidad redirige a https
+     * (o a otro host), y sin seguirla a mano el body es el 302 en si mismo (vacio),
+     * lo que antes se colaba como "lista con 0 canales" sin ningun error visible.
+     */
+    private fun fetch(url: String, redirectsLeft: Int = 5): String {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 30_000
+            instanceFollowRedirects = true
             setRequestProperty("User-Agent", "IPTV-Family/1.0")
         }
-        return try {
+        try {
             val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            stream?.bufferedReader()?.use { it.readText() } ?: ""
+            AppLog.d("Library", "fetch: ${AppLog.redactUrl(url)} -> HTTP $code")
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                    ?: throw IllegalStateException("Redirección ($code) sin destino")
+                if (redirectsLeft <= 0) throw IllegalStateException("Demasiadas redirecciones")
+                val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()
+                AppLog.d("Library", "fetch: redirige a ${AppLog.redactUrl(next)}")
+                return fetch(next, redirectsLeft - 1)
+            }
+            if (code !in 200..299) {
+                throw IllegalStateException("El servidor respondió $code")
+            }
+            return connection.inputStream?.bufferedReader()?.use { it.readText() }.orEmpty()
         } finally {
             connection.disconnect()
         }

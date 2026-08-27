@@ -1,5 +1,6 @@
 package com.iptv.family.shared.data.xtream
 
+import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
@@ -25,7 +26,13 @@ class XtreamApiClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val baseUrlClean: String = baseUrl.trim().trimEnd('/')
+    // Si el usuario pega "midominio.com:8080" sin esquema, java.net.URL lanza
+    // "no protocol: ..." al primer request. Los paneles Xtream son casi siempre
+    // http (no https), así que ese es el valor por defecto razonable.
+    private val baseUrlClean: String = baseUrl.trim().trimEnd('/').let {
+        if (it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true)) it
+        else "http://$it"
+    }
 
     suspend fun login(): LoginResult = withContext(Dispatchers.IO) {
         try {
@@ -47,9 +54,11 @@ class XtreamApiClient(
                     rawUserInfo = userInfo
                 )
             } else {
+                AppLog.w("Xtream", "login: auth=$auth status=$status (respuesta: $obj)")
                 LoginResult(success = false, error = "Credenciales inválidas (auth != 1)")
             }
         } catch (e: Exception) {
+            AppLog.e("Xtream", "login: excepción", e)
             LoginResult(success = false, error = "Error de conexión: ${e.message}")
         }
     }
@@ -62,18 +71,67 @@ class XtreamApiClient(
     suspend fun getVodStreams(): List<Channel> = getStreams("vod")
     suspend fun getSeriesStreams(): List<Channel> = getStreams("series")
 
-    fun getStreamUrl(type: String, streamId: String): String {
-        val extension = when (type) {
+    /**
+     * [containerExtension] es el que devuelve la propia API en cada stream
+     * (mkv, avi, mp4...); si no viene, se usa un valor por defecto razonable.
+     *
+     * OJO: la carpeta de la URL para peliculas es "movie", no "vod" -- el
+     * nombre "vod" solo se usa en la propia API (get_vod_streams); Xtream
+     * Codes sirve el fichero real bajo /movie/usuario/clave/id.ext. Usar
+     * "vod" en la URL da 404 (ERROR_CODE_IO_BAD_HTTP_STATUS en ExoPlayer).
+     */
+    fun getStreamUrl(type: String, streamId: String, containerExtension: String? = null): String {
+        val path = when (type) {
+            "vod" -> "movie"
+            else -> type
+        }
+        val extension = containerExtension?.takeIf { it.isNotBlank() } ?: when (type) {
             "live" -> "m3u8"
             "vod", "series" -> "mp4"
             else -> "m3u8"
         }
-        return "$baseUrlClean/$type/$username/$password/$streamId.$extension"
+        return "$baseUrlClean/$path/$username/$password/$streamId.$extension"
     }
 
-    /** URL de la serie completa para reproducción por toc.m3u8 */
-    fun getSeriesStreamUrl(seriesId: String): String =
-        "$baseUrlClean/series/$username/$password/$seriesId/toc.m3u8"
+    /**
+     * `get_series` solo da el show (temporada/episodios agregados): el
+     * `series_id` que devuelve NO es un stream reproducible por si mismo. Hay
+     * que pedir `get_series_info` para sacar los episodios reales, cada uno
+     * con su propio id reproducible bajo /series/user/pass/episodio_id.ext.
+     * Antes se intentaba reproducir directamente el series_id como si fuera
+     * un canal -- de ahi el mismo ERROR_CODE_IO_BAD_HTTP_STATUS que en VOD.
+     */
+    suspend fun getSeriesEpisodes(seriesId: String): List<Channel> = withContext(Dispatchers.IO) {
+        try {
+            val obj = getJson("action=get_series_info&series_id=$seriesId") as? JsonObject
+                ?: return@withContext emptyList()
+            val episodesBySeason = obj["episodes"] as? JsonObject ?: return@withContext emptyList()
+
+            episodesBySeason.entries
+                .sortedBy { it.key.toIntOrNull() ?: 0 }
+                .flatMap { (season, episodesForSeason) ->
+                    val array = episodesForSeason as? JsonArray ?: return@flatMap emptyList()
+                    array.mapNotNull { element ->
+                        val ep = element as? JsonObject ?: return@mapNotNull null
+                        val episodeId = ep.stringOrNull("id") ?: return@mapNotNull null
+                        val title = ep.stringOrNull("title") ?: "Episodio $episodeId"
+                        val containerExtension = (ep["container_extension"] as? JsonPrimitive)?.content
+                            ?: (ep["info"] as? JsonObject)?.stringOrNull("container_extension")
+                        Channel(
+                            id = episodeId,
+                            name = "T$season · $title",
+                            url = getStreamUrl("series", episodeId, containerExtension),
+                            logoUrl = null,
+                            group = null,
+                            categoryType = CategoryType.SERIES,
+                        )
+                    }
+                }
+        } catch (e: Exception) {
+            AppLog.e("Xtream", "getSeriesEpisodes($seriesId): excepción", e)
+            emptyList()
+        }
+    }
 
     suspend fun getEPG(limit: Int = 1000): List<EPGProgram> = withContext(Dispatchers.IO) {
         try {
@@ -119,6 +177,7 @@ class XtreamApiClient(
                 )
             }
         } catch (e: Exception) {
+            AppLog.e("Xtream", "getCategories($type): excepción", e)
             emptyList()
         }
     }
@@ -132,7 +191,12 @@ class XtreamApiClient(
         }
 
         try {
-            val array = getJson("action=$action") as? JsonArray ?: return@withContext emptyList()
+            val raw = getJson("action=$action")
+            val array = raw as? JsonArray
+            if (array == null) {
+                AppLog.w("Xtream", "getStreams($type): respuesta no es un array: ${raw?.let { it::class.simpleName }}")
+                return@withContext emptyList()
+            }
 
             array.mapNotNull { element ->
                 val stream = element as? JsonObject ?: return@mapNotNull null
@@ -141,10 +205,11 @@ class XtreamApiClient(
                     ?: return@mapNotNull null
 
                 val categoryId = stream.stringOrNull("category_id") ?: ""
+                val containerExtension = stream.stringOrNull("container_extension")
                 Channel(
                     id = streamId,
                     name = stream.stringOrNull("name") ?: "Canal $streamId",
-                    url = getStreamUrl(type, streamId),
+                    url = getStreamUrl(type, streamId, containerExtension),
                     logoUrl = stream.stringOrNull("stream_icon") ?: stream.stringOrNull("cover"),
                     group = categoryId.ifBlank { null },
                     epgChannelId = if (type == "live") streamId else null,
@@ -152,12 +217,14 @@ class XtreamApiClient(
                 )
             }
         } catch (e: Exception) {
+            AppLog.e("Xtream", "getStreams($type): excepción", e)
             emptyList()
         }
     }
 
     private fun getJson(queryString: String): Any? {
         val url = URL("$baseUrlClean/player_api.php?username=$username&password=$password&$queryString")
+        AppLog.d("Xtream", "getJson: ${AppLog.redactUrl(url.toString())}")
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
@@ -167,9 +234,18 @@ class XtreamApiClient(
 
         return try {
             val code = connection.responseCode
+            AppLog.d("Xtream", "getJson: HTTP $code")
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
-            if (body.isBlank()) null else json.parseToJsonElement(body)
+            if (body.isBlank()) {
+                AppLog.w("Xtream", "getJson: cuerpo vacío (HTTP $code)")
+                null
+            } else {
+                json.parseToJsonElement(body)
+            }
+        } catch (e: Exception) {
+            AppLog.e("Xtream", "getJson: excepción de red", e)
+            throw e
         } finally {
             connection.disconnect()
         }

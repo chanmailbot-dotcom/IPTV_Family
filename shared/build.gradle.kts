@@ -1,6 +1,7 @@
 plugins {
     id("org.jetbrains.kotlin.multiplatform") version "2.0.21"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
+    id("com.android.library")
 }
 
 group = "com.iptv.family"
@@ -11,6 +12,7 @@ kotlin {
     // utilizada por la app Android (app/) y el cliente de escritorio
     // (composeApp) para Windows / Linux / macOS.
     jvm("desktop")
+    androidTarget()
 
     sourceSets {
         val commonMain by getting {
@@ -24,6 +26,11 @@ kotlin {
             // Parser XMLTV (JDK DOM) y utilidades solo-escritorio
         }
 
+        val androidMain by getting {
+            // java.io.File / java.net.HttpURLConnection de commonMain funcionan igual en
+            // Android (son parte de libcore): no hace falta codigo especifico aqui.
+        }
+
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
@@ -35,5 +42,17 @@ kotlin {
                 implementation(kotlin("test"))
             }
         }
+    }
+}
+
+android {
+    namespace = "com.iptv.family.shared"
+    compileSdk = 35
+    defaultConfig {
+        minSdk = 21
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }

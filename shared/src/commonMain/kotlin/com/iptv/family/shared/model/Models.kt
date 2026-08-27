@@ -70,7 +70,10 @@ data class UserSettings(
     val videoCompatibilityMode: Boolean = false,
     val enableChromecast: Boolean = false,
     val enableSubtitles: Boolean = true,
-    val autoPlayNext: Boolean = true
+    val autoPlayNext: Boolean = true,
+    val enableWebServer: Boolean = false,
+    val webServerPort: Int = 8080,
+    val webServerToken: String? = null
 )
 
 @Serializable
