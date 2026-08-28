@@ -17,6 +17,7 @@ import uk.co.caprica.vlcj.player.component.MediaPlayerComponent
 import java.awt.Component
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Localizacion del runtime nativo de libvlc.
@@ -101,21 +102,14 @@ class VlcController(compatibilityMode: Boolean = false) {
     private var volumeState by mutableStateOf(80)
     private var mutedState by mutableStateOf(false)
 
-    /** Volumen 0..100. Asignarlo lo aplica en libvlc al momento. */
+    /** Volumen 0..100. Asignarlo lo aplica en libvlc (ver [changeVolume]). */
     var volume: Int
         get() = volumeState
-        set(value) {
-            volumeState = value.coerceIn(0, 100)
-            player.audio().setVolume(volumeState)
-            if (volumeState > 0 && mutedState) isMuted = false
-        }
+        set(value) = changeVolume(value)
 
     var isMuted: Boolean
         get() = mutedState
-        set(value) {
-            mutedState = value
-            player.audio().isMute = value
-        }
+        set(value) = changeMuted(value)
 
     /** Una pista de audio del canal, tal como la ve la UI. */
     data class AudioTrack(
@@ -148,7 +142,7 @@ class VlcController(compatibilityMode: Boolean = false) {
      * el hilo de eventos clavado en `libvlc_audio_set_track`, y el siguiente
      * cambio de canal colgo la UI entera en `libvlc_media_player_set_media`.
      */
-    private val playerCommands = Executors.newSingleThreadExecutor { r ->
+    private val playerCommands = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "vlc-commands").apply { isDaemon = true }
     }
 
@@ -165,6 +159,91 @@ class VlcController(compatibilityMode: Boolean = false) {
         }.onFailure { AppLog.e("Vlc", "no se pudo encolar '$what'", it) }
     }
 
+    /** Como [offEventThread] pero [delayMs] mas tarde. */
+    private fun offEventThreadDelayed(what: String, delayMs: Long, block: () -> Unit) {
+        if (released) return
+        runCatching {
+            playerCommands.schedule(
+                {
+                    if (released) return@schedule
+                    runCatching(block).onFailure { AppLog.e("Vlc", "fallo en '$what'", it) }
+                },
+                delayMs,
+                TimeUnit.MILLISECONDS,
+            )
+        }.onFailure { AppLog.e("Vlc", "no se pudo programar '$what'", it) }
+    }
+
+    /**
+     * Escribe volumen y mute en libvlc.
+     *
+     * libvlc crea la salida de audio (el "aout") de forma perezosa: no existe
+     * hasta que el decodificador entrega las primeras muestras, y mientras no
+     * existe TODA escritura de volumen/mute se descarta en silencio. El evento
+     * `playing` llega antes de ese momento, asi que aplicarlo solo ahi no vale:
+     * se perdia y el reproductor se quedaba mudo.
+     *
+     * Devuelve true si libvlc confirma el valor leyendolo de vuelta. Mientras no
+     * hay aout, `volume()` responde -1 (y vlcj traduce ese -1 de `isMute` a true,
+     * porque compara != 0), asi que ese -1 es la senal de "todavia no, reintenta".
+     */
+    private fun applyAudioSettings(momento: String): Boolean {
+        runCatching {
+            player.audio().setVolume(volumeState)
+            player.audio().isMute = mutedState
+        }.onFailure { AppLog.e("Vlc", "no se pudo aplicar volumen/mute", it); return false }
+        val vol = runCatching { player.audio().volume() }.getOrNull() ?: -1
+        val ok = vol >= 0
+        AppLog.d(
+            "Vlc",
+            "audio ($momento): volumen=$vol mute=${runCatching { player.audio().isMute }.getOrNull()} " +
+                if (ok) "-> aplicado" else "-> aun sin salida de audio, se reintenta"
+        )
+        return ok
+    }
+
+    /**
+     * Insiste en aplicar volumen/mute hasta que libvlc lo acepta de verdad.
+     *
+     * No se sabe cuando aparece el aout: depende de lo que tarde el decodificador
+     * con este canal. Se reintenta con esperas crecientes en vez de con un retardo
+     * fijo, que en un canal lento fallaria igual. Se abandona a los ~8s: si no hay
+     * salida de audio a esas alturas, el problema no es el volumen, y queda escrito
+     * en el log para poder verlo.
+     */
+    private fun applyAudioUntilItSticks(url: String?, intento: Int) {
+        if (currentUrl != url) return // se cambio de canal, esto ya no aplica
+        if (applyAudioSettings("intento $intento")) return
+        if (intento >= 6) {
+            AppLog.w(
+                "Vlc",
+                "audio: libvlc sigue sin salida de audio tras $intento intentos; " +
+                    "el canal puede no traer audio decodificable"
+            )
+            return
+        }
+        offEventThreadDelayed("reaplicar audio", 250L * intento) {
+            applyAudioUntilItSticks(url, intento + 1)
+        }
+    }
+
+    /**
+     * Vuelve a LEER de libvlc el estado de audio, en vez de fiarse de lo que
+     * creemos haberle escrito. Es la unica forma de distinguir "no se oye porque
+     * esta en mute", "porque el volumen es 0" y "porque la pista activa no es la
+     * que pedimos".
+     */
+    private fun logAudioState(momento: String) {
+        val vol = runCatching { player.audio().volume() }.getOrNull()
+        val mute = runCatching { player.audio().isMute }.getOrNull()
+        val track = runCatching { player.audio().track() }.getOrNull()
+        AppLog.d(
+            "Vlc",
+            "estado audio ($momento): libvlc volumen=$vol mute=$mute pista=$track " +
+                "| esperado volumen=$volumeState mute=$mutedState"
+        )
+    }
+
     /** Cambia la pista de audio (la elige el usuario en el selector). */
     fun selectAudioTrack(id: Int) {
         // Se refleja ya en la UI y la llamada nativa va aparte: setTrack puede
@@ -174,6 +253,7 @@ class VlcController(compatibilityMode: Boolean = false) {
         offEventThread("setTrack($id)") {
             player.audio().setTrack(id)
             AppLog.d("Vlc", "pista de audio cambiada a $label (id=$id)")
+            logAudioState("tras setTrack($id)")
         }
     }
 
@@ -302,8 +382,7 @@ class VlcController(compatibilityMode: Boolean = false) {
                 // momento en que el reproductor lo acepta de verdad.
                 val url = currentUrl
                 offEventThread("playing") {
-                    player.audio().setVolume(volumeState)
-                    player.audio().isMute = mutedState
+                    applyAudioUntilItSticks(url, intento = 1)
                     refreshAudioTracks(autoSelect = true, expectedUrl = url)
                 }
             }
@@ -439,14 +518,14 @@ class VlcController(compatibilityMode: Boolean = false) {
     private var lastPlayArgs: PlayArgs? = null
 
     fun changeVolume(value: Int) {
-        volume = value.coerceIn(0, 100)
-        player.audio().setVolume(volume)
-        if (volume > 0 && isMuted) changeMuted(false)
+        volumeState = value.coerceIn(0, 100)
+        if (volumeState > 0) mutedState = false
+        offEventThread("volumen=$volumeState") { applyAudioSettings("cambio de volumen") }
     }
 
     fun changeMuted(value: Boolean) {
-        isMuted = value
-        player.audio().isMute = value
+        mutedState = value
+        offEventThread("mute=$value") { applyAudioSettings("cambio de mute") }
     }
 
     /** Idempotente: liberar dos veces el componente nativo puede abortar la JVM. */
