@@ -17,7 +17,19 @@ import com.iptv.family.shared.log.AppLog
  */
 class ExoPlayerController(context: Context) {
 
-    val player: ExoPlayer = ExoPlayer.Builder(context).build()
+    val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
+        // Idioma de audio por defecto: español. Ademas se descarta explicitamente
+        // la audiodescripcion (ROLE_FLAG_DESCRIBES_VIDEO), porque en television
+        // española es habitual que esa sea la PRIMERA pista del canal: sin esto
+        // se oye al narrador describiendo la escena en vez del audio normal.
+        // Basta con la preferencia de idioma: la audiodescripcion viene etiquetada
+        // como "qad" (rango ISO 639-3 de uso local), que NO casa con español, asi
+        // que ExoPlayer se queda con la pista "spa" aunque vaya la segunda.
+        trackSelectionParameters = trackSelectionParameters
+            .buildUpon()
+            .setPreferredAudioLanguages("es", "spa", "cas")
+            .build()
+    }
 
     var isPlaying by mutableStateOf(false)
         private set

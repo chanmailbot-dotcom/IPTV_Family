@@ -1,5 +1,6 @@
 package com.iptv.family.desktop.remote
 
+import com.iptv.family.shared.data.audio.AudioTrackPreference
 import com.iptv.family.shared.log.AppLog
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -50,7 +51,7 @@ class AudioTranscoder(
      * devuelve el fichero de la lista HLS resultante, o null si no se pudo
      * arrancar. Idempotente: si ya hay uno para este canal, lo reutiliza.
      */
-    fun playlistFor(channelId: String, sourceUrl: String): File? {
+    fun playlistFor(channelId: String, sourceUrl: String, audioTrackIndex: Int = 0): File? {
         synchronized(lock) {
             val current = session
             if (current != null && current.channelId == channelId && current.process.isAlive) {
@@ -60,11 +61,11 @@ class AudioTranscoder(
             // Cambio de canal (o el proceso murio): fuera el anterior. Solo se
             // mantiene un ffmpeg vivo -- se transcodifica lo que se esta viendo.
             stopLocked()
-            return startLocked(channelId, sourceUrl)
+            return startLocked(channelId, sourceUrl, audioTrackIndex)
         }
     }
 
-    private fun startLocked(channelId: String, sourceUrl: String): File? {
+    private fun startLocked(channelId: String, sourceUrl: String, audioTrackIndex: Int): File? {
         val dir = File(workDir, "ch-$channelId").apply {
             deleteRecursively()
             mkdirs()
@@ -95,8 +96,11 @@ class AudioTranscoder(
             // Descarta subtitulos y pistas de datos: el navegador no las va a usar y
             // algunas (teletexto en DVB) hacen fallar al muxer de HLS.
             "-sn", "-dn",
-            // Solo la primera pista de video y la primera de audio.
-            "-map", "0:v:0", "-map", "0:a:0?",
+            // La primera pista de video y la pista de audio ELEGIDA (no la
+            // primera): en television española la primera suele ser la
+            // audiodescripcion, asi que `0:a:0` habria convertido al narrador
+            // describiendo la escena. Ver AudioTrackPreference.
+            "-map", "0:v:0", "-map", "0:a:$audioTrackIndex?",
             "-f", "hls",
             "-hls_time", "4",
             // Ventana corta y borrado de segmentos viejos: es directo, no hace falta
@@ -218,12 +222,19 @@ class AudioTranscoder(
         }
 
         /**
+         * Lo que hace falta saber del audio de un canal: en que codec viene la
+         * pista que se va a usar, y que numero de pista de audio es (el `N` de
+         * `-map 0:a:N`), porque la preferida no siempre es la primera.
+         */
+        data class AudioInfo(val codec: String?, val trackIndex: Int)
+
+        /**
          * Codec de audio del stream, via ffprobe (que viene con ffmpeg). Devuelve
          * null si no se puede averiguar -- en ese caso NO se transcodifica, para no
          * meter un ffmpeg por medio a ciegas.
          */
-        fun probeAudioCodec(ffmpegPath: String, url: String): String? {
-            val ffprobe = ffmpegPath.replace(Regex("ffmpeg(\\.exe)?$", RegexOption.IGNORE_CASE)) {
+        fun probeAudio(ffmpegPath: String, url: String): AudioInfo? {
+            val ffprobe = ffmpegPath.replace(Regex("""ffmpeg(\.exe)?$""", RegexOption.IGNORE_CASE)) {
                 if (it.value.endsWith(".exe", ignoreCase = true)) "ffprobe.exe" else "ffprobe"
             }
             val command = listOf(
@@ -232,11 +243,13 @@ class AudioTranscoder(
                 // acaban en .ts y el demuxer HLS las rechazaria.
                 "-allowed_extensions", "ALL",
                 "-extension_picky", "0",
-                // Se piden TODAS las pistas y se busca la de audio aqui, en vez de
-                // usar `-select_streams a:0`: con una fuente HLS, ese selector se
-                // resuelve antes de terminar el sondeo y devolvia vacio siempre
-                // (por eso el codec salia "desconocido" y nunca se transcodificaba).
-                "-show_entries", "stream=codec_type,codec_name",
+                // Se piden TODAS las pistas (con su idioma) y se decide aqui, en vez
+                // de usar `-select_streams a:0`: con una fuente HLS ese selector se
+                // resuelve antes de terminar el sondeo y devolvia vacio siempre (por
+                // eso el codec salia "desconocido" y nunca se transcodificaba). Y
+                // ademas hace falta el idioma para no quedarse con la
+                // audiodescripcion, que en TDT española suele ir primera.
+                "-show_entries", "stream=codec_type,codec_name:stream_tags=language,title",
                 "-of", "default=noprint_wrappers=1",
                 "-analyzeduration", "6000000", "-probesize", "6000000",
                 url,
@@ -248,18 +261,55 @@ class AudioTranscoder(
                     process.destroyForcibly()
                     return null
                 }
-                // La salida son pares por pista:
-                //   codec_name=h264 / codec_type=video / codec_name=aac / codec_type=audio
-                var lastName: String? = null
-                for (line in output.lineSequence()) {
-                    val trimmed = line.trim()
-                    when {
-                        trimmed.startsWith("codec_name=") -> lastName = trimmed.substringAfter('=').lowercase()
-                        trimmed == "codec_type=audio" -> return@runCatching lastName
-                    }
-                }
-                null
+                pickAudioTrack(output)
             }.getOrNull()
+        }
+
+        /**
+         * Interpreta la salida de ffprobe y elige la pista de audio preferida.
+         *
+         * ffprobe imprime bloques de `clave=valor` por pista, en orden. Se agrupan
+         * las de tipo audio y se puntuan con [AudioTrackPreference] (español si,
+         * audiodescripcion no).
+         *
+         * Se expone para poder probarlo sin lanzar ffprobe de verdad.
+         */
+        fun pickAudioTrack(ffprobeOutput: String): AudioInfo? {
+            data class Raw(val codec: String?, val type: String?, val language: String?, val title: String?)
+
+            val tracks = mutableListOf<Raw>()
+            var codec: String? = null
+            var type: String? = null
+            var language: String? = null
+            var title: String? = null
+
+            fun flush() {
+                if (type != null) tracks += Raw(codec, type, language, title)
+                codec = null; type = null; language = null; title = null
+            }
+
+            for (line in ffprobeOutput.lineSequence()) {
+                val trimmed = line.trim()
+                val value = trimmed.substringAfter('=', "").trim().takeIf { it.isNotEmpty() }
+                when {
+                    trimmed.startsWith("codec_name=") -> {
+                        // Un codec_name nuevo empieza otra pista.
+                        if (type != null) flush()
+                        codec = value?.lowercase()
+                    }
+                    trimmed.startsWith("codec_type=") -> type = value?.lowercase()
+                    trimmed.startsWith("TAG:language=") -> language = value
+                    trimmed.startsWith("TAG:title=") -> title = value
+                }
+            }
+            flush()
+
+            // Solo las de audio, y su posicion entre las de audio (el N de `-map 0:a:N`).
+            val audio = tracks.filter { it.type == "audio" }.distinct()
+            if (audio.isEmpty()) return null
+
+            val best = AudioTrackPreference.preferred(audio, { it.language }, { it.title }) ?: audio.first()
+            return AudioInfo(codec = best.codec, trackIndex = audio.indexOf(best).coerceAtLeast(0))
         }
 
         /** true si ese codec de audio necesita conversion para oirse en un navegador. */

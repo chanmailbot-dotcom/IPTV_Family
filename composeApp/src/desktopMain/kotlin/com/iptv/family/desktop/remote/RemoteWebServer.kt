@@ -110,8 +110,9 @@ class RemoteWebServer(
     /** Corrutina que mata ffmpeg cuando nadie lo esta usando. */
     private var transcoderJanitor: kotlinx.coroutines.Job? = null
 
-    /** Cache de codec de audio por canal, para no lanzar un ffprobe por peticion. */
-    private val audioCodecByChannel = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** Cache del sondeo de audio por canal, para no lanzar un ffprobe por peticion. */
+    private val audioInfoByChannel =
+        java.util.concurrent.ConcurrentHashMap<String, AudioTranscoder.Companion.AudioInfo>()
 
     private fun users(): List<WebUser> = appState.settings.webUsers
 
@@ -573,7 +574,7 @@ class RemoteWebServer(
         transcoderJanitor = null
         transcoder?.stop()
         transcoder = null
-        audioCodecByChannel.clear()
+        audioInfoByChannel.clear()
         engine?.stop(1000, 2000)
         engine = null
         AppLog.d("RemoteServer", "stop")
@@ -634,18 +635,22 @@ class RemoteWebServer(
         val ff = ffmpeg ?: return null
         val channelId = currentChannelId() ?: return null
 
-        val codec = audioCodecByChannel.getOrPut(channelId) {
+        val info = audioInfoByChannel.getOrPut(channelId) {
             // ffprobe apunta al mux local, no al panel: asi no abre una conexion
             // propia contra el proveedor (ver comentario en AudioTranscoder).
             val probeUrl = localMuxUrl() ?: return null
-            val detected = AudioTranscoder.probeAudioCodec(ff, probeUrl)
-            AppLog.d("RemoteServer", "canal $channelId: audio detectado = ${detected ?: "desconocido"}")
-            detected ?: UNKNOWN_CODEC
+            val detected = AudioTranscoder.probeAudio(ff, probeUrl)
+            AppLog.d(
+                "RemoteServer",
+                "canal $channelId: audio detectado = ${detected?.codec ?: "desconocido"}" +
+                    (detected?.let { " (pista ${it.trackIndex})" } ?: "")
+            )
+            detected ?: UNKNOWN_AUDIO
         }
-        if (codec == UNKNOWN_CODEC || !AudioTranscoder.needsTranscode(codec)) return null
+        if (info.codec == null || !AudioTranscoder.needsTranscode(info.codec)) return null
 
         val source = localMuxUrl() ?: return null
-        return tc.playlistFor(channelId, source)
+        return tc.playlistFor(channelId, source, info.trackIndex)
     }
 
     /**
@@ -778,8 +783,8 @@ class RemoteWebServer(
         /** Minimo de la contraseña: corto pero no ridiculo, es una red domestica. */
         const val MIN_PASSWORD_LENGTH = 6
 
-        /** Marca en la cache de codecs para "ffprobe no supo decirlo": no transcodificar. */
-        const val UNKNOWN_CODEC = "?"
+        /** Marca en la cache para "ffprobe no supo decirlo": no transcodificar. */
+        val UNKNOWN_AUDIO = AudioTranscoder.Companion.AudioInfo(codec = null, trackIndex = 0)
 
         /** Manifest PWA-lite: permite "añadir a pantalla de inicio" con el icono y color de marca. */
         const val WEB_MANIFEST = """{

@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Pause
@@ -30,13 +32,19 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
@@ -315,6 +323,9 @@ private fun ControlBar(
             }
         }
 
+        // Selector de idioma: solo aparece si el canal trae mas de una pista.
+        AudioTrackSelector(controller)
+
         IconButton({ controller.changeMuted(!controller.isMuted) }) {
             Icon(
                 if (controller.isMuted || controller.volume == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
@@ -333,6 +344,50 @@ private fun ControlBar(
                 if (isFullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
                 contentDescription = if (isFullscreen) "Salir de pantalla completa" else "Pantalla completa",
             )
+        }
+    }
+}
+
+/**
+ * Elegir el idioma del audio. No se muestra cuando el canal solo trae una pista,
+ * que es la mayoria: ocuparia sitio en la barra sin ofrecer nada.
+ *
+ * El español se selecciona solo al empezar (ver VlcController.refreshAudioTracks);
+ * esto es para cambiarlo a mano cuando haga falta.
+ */
+@Composable
+private fun AudioTrackSelector(controller: VlcController) {
+    val tracks = controller.audioTracks
+    if (tracks.size < 2) return
+
+    var expanded by remember { mutableStateOf(false) }
+    val current = tracks.firstOrNull { it.id == controller.currentAudioTrackId }
+
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Rounded.Translate,
+                contentDescription = "Idioma del audio",
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(current?.label ?: "Audio", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            tracks.forEach { track ->
+                DropdownMenuItem(
+                    text = { Text(track.label) },
+                    leadingIcon = {
+                        if (track.id == controller.currentAudioTrackId) {
+                            Icon(Icons.Rounded.Check, contentDescription = "Seleccionado")
+                        }
+                    },
+                    onClick = {
+                        controller.selectAudioTrack(track.id)
+                        expanded = false
+                    },
+                )
+            }
         }
     }
 }

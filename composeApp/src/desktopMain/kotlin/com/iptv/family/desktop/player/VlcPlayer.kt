@@ -3,10 +3,12 @@ package com.iptv.family.desktop.player
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.iptv.family.shared.data.audio.AudioTrackPreference
 import com.iptv.family.shared.log.AppLog
 import com.sun.jna.NativeLibrary
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.log.LogLevel
+import uk.co.caprica.vlcj.media.TrackType
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
@@ -27,6 +29,11 @@ object VlcNative {
     val isAvailable: Boolean by lazy { discover() }
 
     private fun discover(): Boolean = try {
+        // libvlc devuelve sus cadenas en UTF-8, pero JNA las decodifica con la
+        // codificacion por defecto de la plataforma (Windows-1252 aqui), asi que
+        // los nombres de pista llegaban como "Pista 2 - [EspaÃ±ol]" y no habia
+        // forma de reconocer el idioma. Hay que fijarlo ANTES de cargar libvlc.
+        System.setProperty("jna.encoding", "UTF-8")
         val dir = bundledDir()
         AppLog.d("Vlc", "discover: bundledDir=$dir")
         dir?.let {
@@ -109,6 +116,113 @@ class VlcController(compatibilityMode: Boolean = false) {
             player.audio().isMute = value
         }
 
+    /** Una pista de audio del canal, tal como la ve la UI. */
+    data class AudioTrack(
+        /** ID interno de libvlc, el que se pasa a `audio().setTrack()`. */
+        val id: Int,
+        val language: String?,
+        val title: String?,
+    ) {
+        /** Etiqueta para el selector ("Español", "Audiodescripción", "Inglés"...). */
+        val label: String get() = AudioTrackPreference.displayName(language, title)
+    }
+
+    /** Pistas de audio del canal en curso (vacio hasta que libvlc las descubre). */
+    var audioTracks by mutableStateOf<List<AudioTrack>>(emptyList())
+        private set
+
+    /** ID de libvlc de la pista de audio activa, o null si no se sabe todavia. */
+    var currentAudioTrackId by mutableStateOf<Int?>(null)
+        private set
+
+    /** Cambia la pista de audio (la elige el usuario en el selector). */
+    fun selectAudioTrack(id: Int) {
+        runCatching { player.audio().setTrack(id) }
+            .onSuccess {
+                currentAudioTrackId = id
+                val label = audioTracks.firstOrNull { it.id == id }?.label
+                AppLog.d("Vlc", "pista de audio cambiada a $label (id=$id)")
+            }
+            .onFailure { AppLog.e("Vlc", "no se pudo cambiar la pista de audio", it) }
+    }
+
+    /**
+     * Lee las pistas del medio y pone la mejor: en España es habitual que la
+     * PRIMERA pista sea la audiodescripcion (idioma "qad"), asi que dejar la que
+     * elige libvlc por defecto hace que se oiga al narrador describiendo la
+     * escena en vez del audio normal. Ver [AudioTrackPreference].
+     *
+     * Se llama al empezar a reproducir y de nuevo un momento despues: con HLS las
+     * pistas van apareciendo a medida que se analiza el stream, y en el primer
+     * instante puede que solo se conozca una.
+     */
+    private fun refreshAudioTracks(autoSelect: Boolean) {
+        // `audio().trackDescriptions()` y NO `media().info().audioTracks()`: lo
+        // segundo son los datos estaticos del medio, que con un HLS en directo
+        // vienen vacios (hace falta parsear el medio, y un directo no se parsea).
+        // trackDescriptions() es la lista viva del reproductor, la que libvlc
+        // conoce mientras suena.
+        //
+        // Trae un id y un texto tipo "Pista 1 - [Spanish]"; el idioma se saca de
+        // los corchetes. El id -1 es la entrada "Desactivar" de libvlc, no es una
+        // pista de verdad.
+        val tracks = runCatching {
+            player.audio().trackDescriptions()
+                ?.filter { it.id() >= 0 }
+                ?.map { desc ->
+                    val text = desc.description().orEmpty()
+                    AudioTrack(
+                        id = desc.id(),
+                        language = LANGUAGE_IN_BRACKETS.find(text)?.groupValues?.get(1)?.trim(),
+                        title = text,
+                    )
+                }
+        }.getOrNull().orEmpty()
+        if (tracks.isEmpty()) return
+
+        val changed = tracks != audioTracks
+        if (changed) {
+            AppLog.d(
+                "Vlc",
+                "audio: ${tracks.size} pista(s) -> " +
+                    tracks.joinToString { "${it.label} (id=${it.id}, '${it.title}')" }
+            )
+        }
+        audioTracks = tracks
+        val activeId = runCatching { player.audio().track() }.getOrNull()
+        currentAudioTrackId = activeId
+
+        if (!autoSelect || !changed) return
+        if (autoSelectedForUrl == currentUrl) return // ya se eligio para este canal
+
+        val currentIndex = tracks.indexOfFirst { it.id == activeId }
+        val shouldSwitch = AudioTrackPreference.shouldSwitch(
+            tracks = tracks,
+            currentIndex = currentIndex,
+            language = { it.language },
+            title = { it.title },
+        )
+        if (!shouldSwitch) {
+            // Solo se da por decidido si habia de verdad entre que elegir. Con una
+            // sola pista no hay decision, y marcarlo aqui hacia que al aparecer la
+            // segunda (los ES de un HLS van llegando uno a uno) ya no se
+            // reconsiderara nunca: se quedaba en la audiodescripcion.
+            if (tracks.size >= 2) autoSelectedForUrl = currentUrl
+            return
+        }
+        val best = AudioTrackPreference.preferred(tracks, { it.language }, { it.title }) ?: return
+        AppLog.d(
+            "Vlc",
+            "audio: ${tracks.size} pistas (${tracks.joinToString { it.label }}); " +
+                "cambiando a ${best.label} porque la activa no era la preferida"
+        )
+        autoSelectedForUrl = currentUrl
+        selectAudioTrack(best.id)
+    }
+
+    /** URL para la que ya se hizo la seleccion automatica, para no repetirla. */
+    private var autoSelectedForUrl: String? = null
+
     /**
      * Ultimas lineas de log nativas de libvlc (WARNING/ERROR), para poder mostrar la
      * causa real de un fallo: el evento `error()` de vlcj no trae motivo, solo avisa
@@ -153,6 +267,21 @@ class VlcController(compatibilityMode: Boolean = false) {
                     mp.audio().setVolume(volumeState)
                     mp.audio().isMute = mutedState
                 }
+                refreshAudioTracks(autoSelect = true)
+            }
+
+            /**
+             * Las pistas de un HLS no estan todas al empezar: van apareciendo al
+             * analizar el stream. Este evento avisa de cada una, y es donde de
+             * verdad se puede elegir el español (en `playing` a veces solo se
+             * conoce la primera pista, que es justo la audiodescripcion).
+             */
+            override fun elementaryStreamAdded(mp: MediaPlayer, type: TrackType, id: Int) {
+                if (type == TrackType.AUDIO) refreshAudioTracks(autoSelect = true)
+            }
+
+            override fun elementaryStreamDeleted(mp: MediaPlayer, type: TrackType, id: Int) {
+                if (type == TrackType.AUDIO) refreshAudioTracks(autoSelect = false)
             }
 
             override fun paused(mp: MediaPlayer) {
@@ -216,6 +345,10 @@ class VlcController(compatibilityMode: Boolean = false) {
         error = null
         isBuffering = true
         currentUrl = url
+        // Las pistas del canal anterior no valen para el nuevo.
+        audioTracks = emptyList()
+        currentAudioTrackId = null
+        autoSelectedForUrl = null
         // Se recuerdan los argumentos para poder volver a arrancar este mismo canal
         // despues de un stop() (ver togglePlayPause).
         lastPlayArgs = PlayArgs(url, networkCachingMs, hardwareDecoding, playbackUrl)
@@ -291,6 +424,12 @@ class VlcController(compatibilityMode: Boolean = false) {
     private var released = false
 
     private companion object {
+        /**
+         * libvlc describe las pistas como "Pista 1 - [Spanish]" o "Audio - [spa]":
+         * de ahi se saca el codigo/nombre de idioma para poder puntuarlas.
+         */
+        val LANGUAGE_IN_BRACKETS = Regex("""\[([^\]]+)\]""")
+
         val isMacOs: Boolean
             get() = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
 
