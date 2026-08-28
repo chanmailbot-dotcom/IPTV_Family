@@ -51,7 +51,18 @@ class AudioTranscoder(
      * devuelve el fichero de la lista HLS resultante, o null si no se pudo
      * arrancar. Idempotente: si ya hay uno para este canal, lo reutiliza.
      */
-    fun playlistFor(channelId: String, sourceUrl: String, audioTrackIndex: Int = 0): File? {
+    /**
+     * @param recodeAudio true si hay que convertir el audio a AAC porque el
+     *   navegador no sabe decodificar el original. Si es false solo se remuxea
+     *   (`-c:a copy`), que es casi gratis: se usa cuando el codec ya vale y lo
+     *   unico que hace falta es QUEDARSE CON OTRA PISTA.
+     */
+    fun playlistFor(
+        channelId: String,
+        sourceUrl: String,
+        audioTrackIndex: Int = 0,
+        recodeAudio: Boolean = true,
+    ): File? {
         synchronized(lock) {
             val current = session
             if (current != null && current.channelId == channelId && current.process.isAlive) {
@@ -61,11 +72,16 @@ class AudioTranscoder(
             // Cambio de canal (o el proceso murio): fuera el anterior. Solo se
             // mantiene un ffmpeg vivo -- se transcodifica lo que se esta viendo.
             stopLocked()
-            return startLocked(channelId, sourceUrl, audioTrackIndex)
+            return startLocked(channelId, sourceUrl, audioTrackIndex, recodeAudio)
         }
     }
 
-    private fun startLocked(channelId: String, sourceUrl: String, audioTrackIndex: Int): File? {
+    private fun startLocked(
+        channelId: String,
+        sourceUrl: String,
+        audioTrackIndex: Int,
+        recodeAudio: Boolean,
+    ): File? {
         val dir = File(workDir, "ch-$channelId").apply {
             deleteRecursively()
             mkdirs()
@@ -90,9 +106,13 @@ class AudioTranscoder(
             // El video se copia SIN recodificar: es lo que mantiene el coste de CPU
             // en algo despreciable. Solo el audio se convierte.
             "-c:v", "copy",
-            "-c:a", "aac",
-            "-b:a", "160k",
-            "-ac", "2",
+        ) + (
+            // Recodificar solo cuando hace falta de verdad. Si el codec ya lo
+            // entiende el navegador, copiarlo cuesta practicamente cero CPU y
+            // ademas no degrada el sonido.
+            if (recodeAudio) listOf("-c:a", "aac", "-b:a", "160k", "-ac", "2")
+            else listOf("-c:a", "copy")
+        ) + listOf(
             // Descarta subtitulos y pistas de datos: el navegador no las va a usar y
             // algunas (teletexto en DVB) hacen fallar al muxer de HLS.
             "-sn", "-dn",
@@ -226,7 +246,7 @@ class AudioTranscoder(
          * pista que se va a usar, y que numero de pista de audio es (el `N` de
          * `-map 0:a:N`), porque la preferida no siempre es la primera.
          */
-        data class AudioInfo(val codec: String?, val trackIndex: Int)
+        data class AudioInfo(val codec: String?, val trackIndex: Int, val trackCount: Int = 1)
 
         /**
          * Codec de audio del stream, via ffprobe (que viene con ffmpeg). Devuelve
@@ -249,7 +269,12 @@ class AudioTranscoder(
                 // eso el codec salia "desconocido" y nunca se transcodificaba). Y
                 // ademas hace falta el idioma para no quedarse con la
                 // audiodescripcion, que en TDT española suele ir primera.
-                "-show_entries", "stream=codec_type,codec_name:stream_tags=language,title",
+                // `index` es imprescindible: con una fuente HLS ffprobe imprime
+                // CADA stream dos veces (una pasada sin etiquetas y otra con
+                // ellas), y sin el indice no hay forma de saber que la segunda
+                // tanda son los mismos streams. Contandolos por orden salian tres
+                // pistas de audio donde solo hay dos.
+                "-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title",
                 "-of", "default=noprint_wrappers=1",
                 "-analyzeduration", "6000000", "-probesize", "6000000",
                 url,
@@ -275,41 +300,70 @@ class AudioTranscoder(
          * Se expone para poder probarlo sin lanzar ffprobe de verdad.
          */
         fun pickAudioTrack(ffprobeOutput: String): AudioInfo? {
-            data class Raw(val codec: String?, val type: String?, val language: String?, val title: String?)
+            class Raw(var index: Int? = null) {
+                var codec: String? = null
+                var type: String? = null
+                var language: String? = null
+                var title: String? = null
+            }
 
             val tracks = mutableListOf<Raw>()
-            var codec: String? = null
-            var type: String? = null
-            var language: String? = null
-            var title: String? = null
-
-            fun flush() {
-                if (type != null) tracks += Raw(codec, type, language, title)
-                codec = null; type = null; language = null; title = null
+            var cur: Raw? = null
+            fun open(index: Int? = null) {
+                cur = Raw(index).also { tracks += it }
             }
 
             for (line in ffprobeOutput.lineSequence()) {
                 val trimmed = line.trim()
                 val value = trimmed.substringAfter('=', "").trim().takeIf { it.isNotEmpty() }
                 when {
+                    trimmed.startsWith("index=") -> open(value?.toIntOrNull())
                     trimmed.startsWith("codec_name=") -> {
-                        // Un codec_name nuevo empieza otra pista.
-                        if (type != null) flush()
-                        codec = value?.lowercase()
+                        // Sin `index=` delante (salidas antiguas), un codec_name nuevo
+                        // es el comienzo de otra pista.
+                        if (cur == null || cur?.codec != null) open()
+                        cur?.codec = value?.lowercase()
                     }
-                    trimmed.startsWith("codec_type=") -> type = value?.lowercase()
-                    trimmed.startsWith("TAG:language=") -> language = value
-                    trimmed.startsWith("TAG:title=") -> title = value
+                    trimmed.startsWith("codec_type=") -> cur?.type = value?.lowercase()
+                    trimmed.startsWith("TAG:language=") -> cur?.language = value
+                    trimmed.startsWith("TAG:title=") -> cur?.title = value
                 }
             }
-            flush()
+
+            // Con una fuente HLS, ffprobe imprime CADA stream dos veces: primero sin
+            // etiquetas y despues con ellas. Se fusionan por indice, quedandose con
+            // el idioma alla donde aparezca. Sin esto se contaban pistas de audio de
+            // mas y `-map 0:a:N` apuntaba a una que no existe -- y como lleva `?`,
+            // ffmpeg la descartaba en silencio y la web se quedaba SIN AUDIO.
+            val streams = if (tracks.any { it.index != null }) {
+                val byIndex = LinkedHashMap<Int, Raw>()
+                for (t in tracks) {
+                    val i = t.index ?: continue
+                    val prev = byIndex[i]
+                    if (prev == null) {
+                        byIndex[i] = t
+                    } else {
+                        if (prev.codec == null) prev.codec = t.codec
+                        if (prev.type == null) prev.type = t.type
+                        if (prev.language == null) prev.language = t.language
+                        if (prev.title == null) prev.title = t.title
+                    }
+                }
+                byIndex.values.sortedBy { it.index }
+            } else {
+                tracks
+            }
 
             // Solo las de audio, y su posicion entre las de audio (el N de `-map 0:a:N`).
-            val audio = tracks.filter { it.type == "audio" }.distinct()
+            val audio = streams.filter { it.type == "audio" }
             if (audio.isEmpty()) return null
 
             val best = AudioTrackPreference.preferred(audio, { it.language }, { it.title }) ?: audio.first()
-            return AudioInfo(codec = best.codec, trackIndex = audio.indexOf(best).coerceAtLeast(0))
+            return AudioInfo(
+                codec = best.codec,
+                trackIndex = audio.indexOf(best).coerceAtLeast(0),
+                trackCount = audio.size,
+            )
         }
 
         /** true si ese codec de audio necesita conversion para oirse en un navegador. */

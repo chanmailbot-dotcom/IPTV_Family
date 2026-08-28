@@ -36,6 +36,7 @@ const state = {
   retryCount: 0,
   pendingPlay: false,   // play() bloqueado → mostrar big-play
   audioCheckTimer: null,
+  audioPicked: false,   // ya se eligió pista de audio para el canal en curso
   sse: null,
   started: false,
 };
@@ -362,6 +363,9 @@ function startStream() {
   state.streamChannelId = state.now.channelId || null;
   state.streamUrl = url;
   state.localError = null; // el error del canal anterior no aplica al nuevo
+  // Las pistas del canal anterior no valen para el nuevo: hay que volver a
+  // elegir, o el nuevo canal se quedaria con lo que decidiera el HLS.
+  state.audioPicked = false;
   $("big-play").hidden = true;
   destroyHls();
   renderOverlays();
@@ -408,10 +412,20 @@ function startStream() {
         scheduleRetry();
       }
     });
+    // Sin esto el navegador se queda con la pista que el HLS marque por defecto,
+    // que en muchos canales no es la española (se oía francés en canales que en
+    // la app de escritorio suenan en español).
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => autoPickAudio());
+    hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, () => renderAudioPicker());
     hls.loadSource(url);
     hls.attachMedia(video);
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = url; // Safari: HLS nativo
+    // En HLS nativo las pistas aparecen en video.audioTracks, no en hls.js.
+    if (video.audioTracks) {
+      video.audioTracks.addEventListener("addtrack", () => autoPickAudio());
+      video.audioTracks.addEventListener("change", () => renderAudioPicker());
+    }
   } else {
     showStreamError("Tu navegador no soporta reproducción HLS.");
     return;
@@ -508,6 +522,115 @@ function showStreamError(msg) {
   renderOverlays();
 }
 
+/* ─── Pista de audio: español por defecto ──────────────────────────────────
+   OJO: estas reglas son un espejo de AudioTrackPreference.kt (que es quien
+   manda en la app de escritorio y en el transcodificador). Si cambian alli,
+   hay que cambiarlas aqui: son dos runtimes distintos y no se puede compartir
+   el codigo. */
+const AUDIO_ES = ["es", "spa", "esp", "spanish", "espanol", "español", "cas", "cast",
+  "castellano", "es-es", "spa-es", "lat", "es-419"];
+const AUDIO_DESC = ["qad", "audiodesc", "audio desc", "descripc", "visually impaired",
+  "comentario", "commentary", "narrat"];
+const AUDIO_VOS = ["vos", "original", " ov", "subtitul"];
+
+/** Quita acentos para que "Español" y "Espanol" puntuen igual. */
+const fold = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+/** Mismo baremo que AudioTrackPreference.score: mas alto = mejor. */
+function audioScore(lang, name) {
+  const l = fold(lang);
+  const text = (fold(name) + " " + l).trim();
+  // La audiodescripcion (el narrador que describe la imagen) va la PRIMERA en
+  // muchos canales españoles, con el codigo "qad". Nunca es lo que se quiere.
+  if (AUDIO_DESC.some((d) => text.includes(d))) return -100;
+  let points = 0;
+  if (AUDIO_ES.includes(l) || AUDIO_ES.some((e) => e.length > 3 && text.includes(fold(e)))) points += 100;
+  if (AUDIO_VOS.some((v) => text.includes(v))) points -= 30;
+  if (points === 0 && (l === "" || l === "und" || l === "mul")) points += 20;
+  return points;
+}
+
+/** Las pistas del reproductor en curso, normalizadas: [{index, label, active}]. */
+function audioTracksOf() {
+  const hls = state.hls;
+  if (hls && Array.isArray(hls.audioTracks) && hls.audioTracks.length) {
+    return hls.audioTracks.map((t, i) => ({
+      index: i,
+      lang: t.lang || "",
+      name: t.name || t.label || "",
+      active: i === hls.audioTrack,
+    }));
+  }
+  const native = $("video").audioTracks;
+  if (native && native.length) {
+    return Array.from(native).map((t, i) => ({
+      index: i,
+      lang: t.language || "",
+      name: t.label || "",
+      active: t.enabled,
+    }));
+  }
+  return [];
+}
+
+function setAudioTrack(index) {
+  const hls = state.hls;
+  if (hls && Array.isArray(hls.audioTracks) && hls.audioTracks.length) {
+    hls.audioTrack = index;
+  } else {
+    const native = $("video").audioTracks;
+    if (native) for (let i = 0; i < native.length; i++) native[i].enabled = (i === index);
+  }
+  state.audioPicked = true;
+  renderAudioPicker();
+}
+
+/** Etiqueta legible; si no se reconoce el idioma se enseña lo que venga. */
+function audioLabel(t) {
+  const text = (fold(t.name) + " " + fold(t.lang)).trim();
+  if (AUDIO_DESC.some((d) => text.includes(d))) return "Audiodescripción";
+  if (audioScore(t.lang, t.name) >= 100) return "Español";
+  const NAMES = { en: "Inglés", eng: "Inglés", fr: "Francés", fra: "Francés", fre: "Francés",
+    pt: "Portugués", por: "Portugués", it: "Italiano", ita: "Italiano",
+    de: "Alemán", deu: "Alemán", ger: "Alemán", ca: "Catalán", cat: "Catalán",
+    gl: "Gallego", glg: "Gallego", eu: "Euskera", eus: "Euskera", baq: "Euskera" };
+  return NAMES[fold(t.lang)] || t.name || t.lang || `Pista ${t.index + 1}`;
+}
+
+/**
+ * Elige la mejor pista al empezar un canal. Solo actua una vez por canal, para
+ * no pisar al usuario si la cambia a mano.
+ */
+function autoPickAudio() {
+  const tracks = audioTracksOf();
+  renderAudioPicker();
+  if (state.audioPicked || tracks.length < 2) return;
+  let best = tracks[0], bestScore = audioScore(tracks[0].lang, tracks[0].name);
+  for (const t of tracks.slice(1)) {
+    const s = audioScore(t.lang, t.name);
+    if (s > bestScore) { best = t; bestScore = s; }
+  }
+  const current = tracks.find((t) => t.active) || tracks[0];
+  state.audioPicked = true;
+  if (best.index !== current.index && bestScore > audioScore(current.lang, current.name)) {
+    setAudioTrack(best.index);
+  } else {
+    renderAudioPicker();
+  }
+}
+
+/** Boton "Audio" en los mandos: solo si el canal trae mas de una pista. */
+function renderAudioPicker() {
+  const wrap = $("audio-picker");
+  if (!wrap) return;
+  const tracks = audioTracksOf();
+  wrap.hidden = tracks.length < 2;
+  if (tracks.length < 2) { wrap.classList.remove("is-open"); return; }
+  $("audio-menu").innerHTML = tracks.map((t) =>
+    `<button type="button" class="audio-opt${t.active ? " is-active" : ""}" data-track="${t.index}">`
+    + `${escapeHtml(audioLabel(t))}</button>`).join("");
+}
+
 function teardownLocalVideo() {
   destroyHls();
   const video = $("video");
@@ -517,6 +640,8 @@ function teardownLocalVideo() {
   state.streamUrl = null;
   state.streamChannelId = null;
   state.pendingPlay = false;
+  state.audioPicked = false;
+  renderAudioPicker(); // sin stream no hay pistas: esconde el botón
 }
 /* ─── Lista: filtrado, chips y render por lotes (40k canales sin bloquear) ─── */
 /** Nombre legible del grupo: en Xtream `ch.group` es un id numérico ("142"). */
@@ -834,6 +959,26 @@ function wireControls() {
     e.currentTarget.setAttribute("aria-pressed", String(state.onlyFavs));
     e.currentTarget.classList.toggle("is-active", state.onlyFavs);
     resetList();
+  });
+
+  /* Pista de audio */
+  $("audio-toggle").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const wrap = $("audio-picker");
+    const open = wrap.classList.toggle("is-open");
+    $("audio-toggle").setAttribute("aria-expanded", String(open));
+  });
+  $("audio-menu").addEventListener("click", (e) => {
+    const opt = e.target.closest(".audio-opt");
+    if (!opt) return;
+    setAudioTrack(Number(opt.dataset.track));
+    $("audio-picker").classList.remove("is-open");
+    $("audio-toggle").setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#audio-picker")) return;
+    $("audio-picker").classList.remove("is-open");
+    $("audio-toggle").setAttribute("aria-expanded", "false");
   });
 
   /* Tipo de contenido (delegación) */

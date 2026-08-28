@@ -177,10 +177,13 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                 WebUsersBlock(appState, scope)
 
                 ToggleRow(
-                    title = "Convertir el audio para el navegador",
-                    subtitle = "Muchos canales emiten el audio en AC-3 o MP2, que ningun navegador " +
-                        "puede reproducir (en esta app si se oye). Con esto, ffmpeg lo convierte a AAC " +
-                        "al vuelo. Solo recodifica el audio: el video se copia tal cual.",
+                    title = "Arreglar el audio para el navegador",
+                    subtitle = "Dos problemas que solo afectan a la web. Uno: muchos canales emiten en " +
+                        "AC-3 o MP2, que ningun navegador puede reproducir (en esta app si se oye). " +
+                        "Dos: cuando un canal trae varios idiomas dentro del mismo flujo, el navegador " +
+                        "se queda con el primero — que suele ser la audiodescripcion — sin poder elegir. " +
+                        "Con esto ffmpeg escoge la pista en español y, solo si hace falta, la convierte " +
+                        "a AAC. El video se copia tal cual en ambos casos.",
                     checked = settings.transcodeAudioForWeb,
                 ) { enabled ->
                     scope.launch { appState.mutateSettings { copy(transcodeAudioForWeb = enabled) } }

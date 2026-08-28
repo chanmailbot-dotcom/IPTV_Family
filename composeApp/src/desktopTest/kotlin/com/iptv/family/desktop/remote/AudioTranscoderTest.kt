@@ -26,6 +26,67 @@ class AudioTranscoderTest {
         TAG:language=spa
     """.trimIndent()
 
+    /**
+     * Salida REAL de ffprobe contra el mux local del canal 1548099, con los mismos
+     * flags que usa la app. Lo importante: con una fuente HLS ffprobe imprime CADA
+     * stream DOS veces, primero sin etiquetas y despues con ellas.
+     *
+     * Contando por orden salian tres pistas de audio donde solo hay dos, el
+     * español caia en la posicion 2, y `-map 0:a:2?` no existe: como lleva `?`,
+     * ffmpeg lo descartaba en silencio y el navegador recibia video SIN AUDIO.
+     */
+    private val salidaHlsConStreamsDuplicados = """
+        index=0
+        codec_name=h264
+        codec_type=video
+        index=1
+        codec_name=aac
+        codec_type=audio
+        index=2
+        codec_name=aac
+        codec_type=audio
+        index=3
+        codec_name=dvb_subtitle
+        codec_type=subtitle
+        index=0
+        codec_name=h264
+        codec_type=video
+        index=1
+        codec_name=aac
+        codec_type=audio
+        TAG:language=qad
+        index=2
+        codec_name=aac
+        codec_type=audio
+        TAG:language=spa
+        index=3
+        codec_name=dvb_subtitle
+        codec_type=subtitle
+        TAG:language=spa
+    """.trimIndent()
+
+    @Test
+    fun `los streams repetidos de HLS no inventan pistas de audio de mas`() {
+        val info = AudioTranscoder.pickAudioTrack(salidaHlsConStreamsDuplicados)
+        assertEquals(2, info?.trackCount, "solo hay dos pistas de audio: qad y spa")
+        // El español es la SEGUNDA de audio, o sea `-map 0:a:1`.
+        assertEquals(1, info?.trackIndex)
+        assertEquals("aac", info?.codec)
+    }
+
+    @Test
+    fun `el indice elegido siempre cae dentro de las pistas que existen`() {
+        // Es la invariante que se rompio: un indice fuera de rango deja al
+        // navegador mudo sin que ffmpeg proteste.
+        for (salida in listOf(salidaHlsConStreamsDuplicados, salidaRealDeFfprobe)) {
+            val info = AudioTranscoder.pickAudioTrack(salida)!!
+            assertTrue(
+                info.trackIndex in 0 until info.trackCount,
+                "pista ${info.trackIndex} fuera de rango (hay ${info.trackCount})"
+            )
+        }
+    }
+
     @Test
     fun `elige la pista española y no la audiodescripcion que viene primera`() {
         val info = AudioTranscoder.pickAudioTrack(salidaRealDeFfprobe)

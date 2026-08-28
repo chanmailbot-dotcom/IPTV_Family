@@ -163,6 +163,16 @@
               <input id="volume" class="volume-slider" type="range" min="0" max="100" step="1" value="80" aria-label="Volumen">
             </div>
 
+            <!-- Selector de idioma del audio; oculto si el canal solo trae una pista -->
+            <div id="audio-picker" class="audio-picker" hidden>
+              <button type="button" id="audio-toggle" class="ctrl-btn wide" title="Pista de audio"
+                      aria-label="Pista de audio" aria-haspopup="true" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 5v3.5M5 15l3.5-8 3.5 8M6 13h5"/><path d="M14 19l4-9 4 9M15.6 16h4.8"/></svg>
+                <span>Audio</span>
+              </button>
+              <div id="audio-menu" class="audio-menu" role="menu"></div>
+            </div>
+
             <button id="btn-fs" class="ctrl-btn" title="Pantalla completa (F)" aria-label="Pantalla completa">
               <svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
             </button>

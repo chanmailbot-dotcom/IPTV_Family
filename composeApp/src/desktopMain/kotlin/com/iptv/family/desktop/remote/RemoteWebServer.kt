@@ -655,10 +655,30 @@ class RemoteWebServer(
             )
             detected ?: UNKNOWN_AUDIO
         }
-        if (info.codec == null || !AudioTranscoder.needsTranscode(info.codec)) return null
+        if (info.codec == null) return null
+
+        // Dos motivos distintos para pasar por ffmpeg:
+        val recode = AudioTranscoder.needsTranscode(info.codec)  // el navegador no sabe el codec
+        val wrongTrack = info.trackIndex > 0                     // la pista buena no es la primera
+        if (!recode && !wrongTrack) return null
+
+        // Lo segundo hacia falta y no estaba: en estos canales el audio va MUXEADO
+        // dentro de los segmentos TS, sin renditions `#EXT-X-MEDIA` separadas. Al
+        // demultiplexar, el navegador se queda con la primera pista de audio y no
+        // hay forma de pedirle otra desde JavaScript. Y la primera suele ser la
+        // audiodescripcion (o un idioma que no es el nuestro), asi que la web
+        // sonaba distinto de la app de escritorio, donde VLC si puede elegir.
+        // Cuando solo se trata de eso, ffmpeg copia el audio sin recodificar.
+        if (!recode) {
+            AppLog.d(
+                "RemoteServer",
+                "canal $channelId: audio ${info.codec} vale para el navegador, pero la pista " +
+                    "preferida es la ${info.trackIndex}; se remuxea con ffmpeg (sin recodificar)"
+            )
+        }
 
         val source = localMuxUrl() ?: return null
-        return tc.playlistFor(channelId, source, info.trackIndex)
+        return tc.playlistFor(channelId, source, info.trackIndex, recodeAudio = recode)
     }
 
     /**
