@@ -27,6 +27,7 @@ const state = {
   streamUrl: null,      // URL cargada actualmente en <video>
   streamChannelId: null,
   streamLoading: false,
+  localError: null,      // error del lado del navegador (distinto del del escritorio)
   retryTimer: null,
   retryCount: 0,
   pendingPlay: false,   // play() bloqueado → mostrar big-play
@@ -159,6 +160,48 @@ function setTheme(t) {
     b.setAttribute("aria-checked", String(b.dataset.themeOpt === t)));
 }
 
+/**
+ * Unico sitio que decide que capa se ve encima del video (nada / cargando /
+ * error). Antes la visibilidad se tocaba desde dos sitios independientes -- los
+ * eventos del <video> local y el estado que llega del escritorio por SSE -- y la
+ * rama del escritorio solo sabia MOSTRAR el circulo de "Sintonizando", nunca
+ * ocultarlo: si el escritorio volvia a bufferar despues de que el video local ya
+ * estuviera en marcha, el circulo se quedaba clavado encima de una imagen que se
+ * veia perfectamente.
+ *
+ * La regla es: manda lo que pasa en ESTE navegador. Si aqui hay imagen
+ * avanzando, no hay nada que esperar, diga lo que diga el escritorio.
+ */
+function renderOverlays() {
+  const video = $("video");
+  const np = state.now || {};
+
+  // El <video> va de verdad: no esta en pausa, tiene datos suficientes para
+  // pintar el fotograma actual y no se ha terminado.
+  const playingLocally = Boolean(
+    state.streamUrl && !video.paused && !video.ended && video.readyState >= 3
+  );
+
+  // Un error (del escritorio: canal caido; o local: el stream no carga) sigue
+  // mereciendo aviso, pero no si aqui se esta viendo la imagen igualmente.
+  const errorMsg = state.localError || np.error;
+  const showError = Boolean(errorMsg) && !playingLocally;
+  if (showError) $("error-msg").textContent = errorMsg;
+
+  // "Cargando": o el navegador esta esperando datos, o el escritorio todavia
+  // esta sintonizando y aqui aun no hay imagen.
+  const waiting = !playingLocally && !showError && Boolean(
+    state.streamUrl && (state.streamLoading || np.isBuffering)
+  );
+
+  const idle = !state.streamUrl && !np.channelId && !showError;
+
+  $("overlay-error").hidden = !showError;
+  $("overlay-buffer").hidden = !waiting;
+  $("overlay-idle").hidden = !idle;
+  if (playingLocally) $("big-play").hidden = true;
+}
+
 /* ─── Now playing → UI ─── */
 function applyNowPlaying(np) {
   const prevChannel = state.now.channelId;
@@ -180,16 +223,8 @@ function applyNowPlaying(np) {
   }
   $("live-badge").hidden = !(np?.isPlaying && !np?.error);
 
-  // overlays coherentes con el estado real del escritorio
-  const showingError = Boolean(np?.error);
-  const buffering = Boolean(np?.isBuffering) && !showingError;
-  $("overlay-error").hidden = !showingError;
-  if (showingError) $("error-msg").textContent = np.error;
-  if (buffering && hasChannel) { $("overlay-buffer").hidden = false; $("overlay-idle").hidden = true; }
-  if (!hasChannel && !buffering) {
-    $("overlay-idle").hidden = Boolean(state.streamUrl);
-    $("overlay-buffer").hidden = true;
-  }
+  if (np?.error) $("error-msg").textContent = np.error;
+  renderOverlays();
 
   // sincronizar play/pausa del botón
   setPlayIcon(Boolean(np?.isPlaying));
@@ -213,7 +248,7 @@ function applyNowPlaying(np) {
     // El escritorio ha parado: soltar el <video> en vez de dejar el ultimo
     // fotograma congelado como si siguiera emitiendo.
     teardownLocalVideo();
-    $("overlay-idle").hidden = false;
+    renderOverlays();
   }
   if (prevChannel !== np?.channelId) state.retryCount = 0;
 }
@@ -259,9 +294,10 @@ function startStream() {
   state.streamLoading = true;
   state.streamChannelId = state.now.channelId || null;
   state.streamUrl = url;
-  $("overlay-idle").hidden = true;
+  state.localError = null; // el error del canal anterior no aplica al nuevo
   $("big-play").hidden = true;
   destroyHls();
+  renderOverlays();
 
   // Si en unos segundos no llega ningun fotograma, el canal no esta emitiendo
   // (o el panel no entrega segmentos). Mejor avisar que quedarse en el loop de
@@ -397,9 +433,12 @@ function scheduleRetry() {
 
 function showStreamError(msg) {
   state.streamLoading = false;
+  // Se guarda en el estado (y no se pinta a mano) para que renderOverlays sea el
+  // unico que decide: si el video local acaba arrancando igualmente, el aviso se
+  // retira solo en vez de quedarse encima de una imagen que si se ve.
+  state.localError = msg;
   $("error-msg").textContent = msg;
-  $("overlay-error").hidden = false;
-  $("overlay-buffer").hidden = true;
+  renderOverlays();
 }
 
 function teardownLocalVideo() {
@@ -648,7 +687,7 @@ function wireControls() {
   /* Overlays: reintentar y big-play */
   $("btn-retry").addEventListener("click", () => {
     state.retryCount = 0;
-    $("overlay-error").hidden = true;
+    state.localError = null;
     startStream();
   });
   $("big-play").addEventListener("click", () => {
@@ -656,18 +695,17 @@ function wireControls() {
     $("video").play().catch(() => { $("big-play").hidden = false; });
   });
 
-  /* Eventos del <video> → overlays coherentes */
+  /* Eventos del <video>: TODOS pasan por renderOverlays(), que es el unico que
+     decide que capa se ve. Antes cada evento tocaba los overlays por su cuenta y
+     el circulo de "Sintonizando" se quedaba clavado sobre la imagen. */
   const video = $("video");
-  video.addEventListener("waiting", () => {
-    if (state.streamUrl) $("overlay-buffer").hidden = false;
-  });
-  video.addEventListener("playing", () => {
-    state.streamLoading = false;
-    $("overlay-buffer").hidden = true;
-    $("overlay-error").hidden = true;
-    $("overlay-idle").hidden = true;
-    $("big-play").hidden = true;
-  });
+  ["playing", "canplay", "timeupdate"].forEach((ev) =>
+    video.addEventListener(ev, () => {
+      state.streamLoading = false;
+      renderOverlays();
+    }));
+  ["waiting", "stalled", "pause", "emptied"].forEach((ev) =>
+    video.addEventListener(ev, renderOverlays));
 
   /* Aviso de audio: si es por autoplay bloqueado, un toque lo activa */
   $("audio-notice").addEventListener("click", (e) => {
