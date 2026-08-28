@@ -16,6 +16,7 @@ import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent
 import uk.co.caprica.vlcj.player.component.MediaPlayerComponent
 import java.awt.Component
 import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * Localizacion del runtime nativo de libvlc.
@@ -135,15 +136,45 @@ class VlcController(compatibilityMode: Boolean = false) {
     var currentAudioTrackId by mutableStateOf<Int?>(null)
         private set
 
+    /**
+     * Hilo propio para hablar con libvlc desde fuera de sus callbacks.
+     *
+     * REGLA DE VLCJ: no se puede llamar a libvlc desde dentro de un manejador de
+     * eventos nativo. libvlc tiene tomado un lock interno mientras despacha el
+     * evento, asi que reentrar lo bloquea, y con el se bloquea todo lo demas que
+     * quiera tocar el reproductor. Paso por aqui todo lo que sale de un evento.
+     *
+     * Esto no es teorico: `setTrack()` llamado desde `elementaryStreamAdded` dejo
+     * el hilo de eventos clavado en `libvlc_audio_set_track`, y el siguiente
+     * cambio de canal colgo la UI entera en `libvlc_media_player_set_media`.
+     */
+    private val playerCommands = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "vlc-commands").apply { isDaemon = true }
+    }
+
+    /** Ejecuta [block] fuera del hilo de eventos de libvlc. Ver [playerCommands]. */
+    private fun offEventThread(what: String, block: () -> Unit) {
+        if (released) return
+        runCatching {
+            playerCommands.execute {
+                // Se vuelve a comprobar: entre encolar y ejecutar puede haberse
+                // liberado el reproductor, y usarlo entonces revienta en nativo.
+                if (released) return@execute
+                runCatching(block).onFailure { AppLog.e("Vlc", "fallo en '$what'", it) }
+            }
+        }.onFailure { AppLog.e("Vlc", "no se pudo encolar '$what'", it) }
+    }
+
     /** Cambia la pista de audio (la elige el usuario en el selector). */
     fun selectAudioTrack(id: Int) {
-        runCatching { player.audio().setTrack(id) }
-            .onSuccess {
-                currentAudioTrackId = id
-                val label = audioTracks.firstOrNull { it.id == id }?.label
-                AppLog.d("Vlc", "pista de audio cambiada a $label (id=$id)")
-            }
-            .onFailure { AppLog.e("Vlc", "no se pudo cambiar la pista de audio", it) }
+        // Se refleja ya en la UI y la llamada nativa va aparte: setTrack puede
+        // tardar y no merece congelar el hilo de quien lo pide.
+        currentAudioTrackId = id
+        val label = audioTracks.firstOrNull { it.id == id }?.label
+        offEventThread("setTrack($id)") {
+            player.audio().setTrack(id)
+            AppLog.d("Vlc", "pista de audio cambiada a $label (id=$id)")
+        }
     }
 
     /**
@@ -155,8 +186,14 @@ class VlcController(compatibilityMode: Boolean = false) {
      * Se llama al empezar a reproducir y de nuevo un momento despues: con HLS las
      * pistas van apareciendo a medida que se analiza el stream, y en el primer
      * instante puede que solo se conozca una.
+     *
+     * OJO: tiene que ejecutarse fuera del hilo de eventos de libvlc. Los sitios
+     * que la llaman lo hacen via [offEventThread]. [expectedUrl] es el canal que
+     * estaba sonando cuando se encolo: si entretanto se cambio de canal, esto ya
+     * no aplica y se descarta.
      */
-    private fun refreshAudioTracks(autoSelect: Boolean) {
+    private fun refreshAudioTracks(autoSelect: Boolean, expectedUrl: String?) {
+        if (currentUrl != expectedUrl) return
         // `audio().trackDescriptions()` y NO `media().info().audioTracks()`: lo
         // segundo son los datos estaticos del medio, que con un HLS en directo
         // vienen vacios (hace falta parsear el medio, y un directo no se parsea).
@@ -263,11 +300,12 @@ class VlcController(compatibilityMode: Boolean = false) {
                 // valor puesto en init o antes del play() se perdia y el volumen
                 // volvia al de la libreria. Se reaplica aqui, que es el primer
                 // momento en que el reproductor lo acepta de verdad.
-                runCatching {
-                    mp.audio().setVolume(volumeState)
-                    mp.audio().isMute = mutedState
+                val url = currentUrl
+                offEventThread("playing") {
+                    player.audio().setVolume(volumeState)
+                    player.audio().isMute = mutedState
+                    refreshAudioTracks(autoSelect = true, expectedUrl = url)
                 }
-                refreshAudioTracks(autoSelect = true)
             }
 
             /**
@@ -277,11 +315,15 @@ class VlcController(compatibilityMode: Boolean = false) {
              * conoce la primera pista, que es justo la audiodescripcion).
              */
             override fun elementaryStreamAdded(mp: MediaPlayer, type: TrackType, id: Int) {
-                if (type == TrackType.AUDIO) refreshAudioTracks(autoSelect = true)
+                if (type != TrackType.AUDIO) return
+                val url = currentUrl
+                offEventThread("esAdded") { refreshAudioTracks(autoSelect = true, expectedUrl = url) }
             }
 
             override fun elementaryStreamDeleted(mp: MediaPlayer, type: TrackType, id: Int) {
-                if (type == TrackType.AUDIO) refreshAudioTracks(autoSelect = false)
+                if (type != TrackType.AUDIO) return
+                val url = currentUrl
+                offEventThread("esDeleted") { refreshAudioTracks(autoSelect = false, expectedUrl = url) }
             }
 
             override fun paused(mp: MediaPlayer) {
@@ -411,6 +453,9 @@ class VlcController(compatibilityMode: Boolean = false) {
     fun release() {
         if (released) return
         released = true
+        // Antes de soltar el reproductor: si queda un comando encolado, se
+        // ejecutaria contra un player ya liberado (crash nativo).
+        runCatching { playerCommands.shutdownNow() }
         runCatching { player.controls().stop() }
         runCatching { nativeLog?.release() }
         runCatching {
