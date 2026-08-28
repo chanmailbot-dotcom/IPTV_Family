@@ -79,6 +79,12 @@ class AudioTranscoder(
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
+            // El demuxer HLS de ffmpeg rechaza segmentos cuya URL no acaba en una
+            // extension conocida, y las nuestras son `/stream/segment?src=...`.
+            // Sin esto falla con "not in allowed_segment_extensions" / "Invalid
+            // data found when processing input" y la conversion nunca arranca.
+            "-allowed_extensions", "ALL",
+            "-extension_picky", "0",
             "-i", sourceUrl,
             // El video se copia SIN recodificar: es lo que mantiene el coste de CPU
             // en algo despreciable. Solo el audio se convierte.
@@ -221,21 +227,38 @@ class AudioTranscoder(
                 if (it.value.endsWith(".exe", ignoreCase = true)) "ffprobe.exe" else "ffprobe"
             }
             val command = listOf(
-                ffprobe, "-hide_banner", "-loglevel", "error",
-                "-select_streams", "a:0",
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                "-analyzeduration", "3000000", "-probesize", "3000000",
+                ffprobe, "-hide_banner", "-v", "error",
+                // Igual que en el transcodificado: nuestras URLs de segmento no
+                // acaban en .ts y el demuxer HLS las rechazaria.
+                "-allowed_extensions", "ALL",
+                "-extension_picky", "0",
+                // Se piden TODAS las pistas y se busca la de audio aqui, en vez de
+                // usar `-select_streams a:0`: con una fuente HLS, ese selector se
+                // resuelve antes de terminar el sondeo y devolvia vacio siempre
+                // (por eso el codec salia "desconocido" y nunca se transcodificaba).
+                "-show_entries", "stream=codec_type,codec_name",
+                "-of", "default=noprint_wrappers=1",
+                "-analyzeduration", "6000000", "-probesize", "6000000",
                 url,
             )
             return runCatching {
                 val process = ProcessBuilder(command).redirectErrorStream(false).start()
-                val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-                if (!process.waitFor(15, TimeUnit.SECONDS)) {
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                if (!process.waitFor(25, TimeUnit.SECONDS)) {
                     process.destroyForcibly()
                     return null
                 }
-                output.lineSequence().firstOrNull { it.isNotBlank() }?.lowercase()
+                // La salida son pares por pista:
+                //   codec_name=h264 / codec_type=video / codec_name=aac / codec_type=audio
+                var lastName: String? = null
+                for (line in output.lineSequence()) {
+                    val trimmed = line.trim()
+                    when {
+                        trimmed.startsWith("codec_name=") -> lastName = trimmed.substringAfter('=').lowercase()
+                        trimmed == "codec_type=audio" -> return@runCatching lastName
+                    }
+                }
+                null
             }.getOrNull()
         }
 

@@ -161,20 +161,28 @@ class StreamProxy(private val client: HttpClient) {
     }
 
     private suspend fun respondManifest(call: ApplicationCall, finalUrl: String, text: String) {
-        // El <video> del navegador no puede enviar cabeceras Authorization: propagamos el
-        // token con el que se pidio este manifest a cada URL reescrita, para que los
-        // segmentos (y sub-manifiestos y claves) autentiquen por query y no reciban 401.
-        val token = RemoteAuth.sessionToken(call)
+        // El <video> del navegador no puede enviar cabeceras Authorization: propagamos
+        // en cada URL reescrita la MISMA credencial con la que se pidio este manifest,
+        // para que los segmentos (y sub-manifiestos y claves) autentiquen por query y
+        // no reciban 401.
+        //
+        // Hay dos tipos de credencial y hay que respetar la que venga:
+        //  - `k`: la clave interna del mux, que usan el VLC del escritorio y ffmpeg
+        //    (no tienen cuenta de usuario).
+        //  - `s`: el token de sesion de una persona identificada en la web.
+        // Propagar siempre `s` dejaba los segmentos sin credencial para VLC (que no
+        // tiene sesion), y VLC fallaba con "Failed to create demuxer" al recibir 401.
+        val credential = credentialParamOf(call)
         // Base de resolucion de URIs relativas: la URL final (tras redirecciones).
         val base = finalUrl.substringBeforeLast('/', missingDelimiterValue = "")
         val rewritten = text.lineSequence().joinToString("\n") { line ->
             val trimmed = line.trim()
             when {
                 trimmed.isEmpty() || trimmed.startsWith("#EXT") && trimmed.contains("URI=\"") ->
-                    rewriteTagUris(line, base, token)
+                    rewriteTagUris(line, base, credential)
                 trimmed.startsWith("#") -> line
-                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> segmentProxyUrl(trimmed, token)
-                else -> segmentProxyUrl(resolve(base, trimmed), token)
+                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> segmentProxyUrl(trimmed, credential)
+                else -> segmentProxyUrl(resolve(base, trimmed), credential)
             }
         }
         call.respondText(rewritten, ContentType.parse("application/vnd.apple.mpegurl"))
@@ -209,11 +217,11 @@ class StreamProxy(private val client: HttpClient) {
      * las pidiera directo al panel, abriria una sesion propia), #EXT-X-MAP y
      * #EXT-X-MEDIA para que pasen por este mux.
      */
-    private fun rewriteTagUris(line: String, base: String, token: String?): String =
+    private fun rewriteTagUris(line: String, base: String, credential: String?): String =
         Regex("URI=\"([^\"]+)\"").replace(line) { match ->
             val ref = match.groupValues[1]
             if (ref.startsWith("data:")) match.value
-            else "URI=\"${segmentProxyUrl(resolve(base, ref), token)}\""
+            else "URI=\"${segmentProxyUrl(resolve(base, ref), credential)}\""
         }
 
     /** Sirve un segmento (.ts/.m4s) desde cache o, si no esta, lo baja y lo cachea. */
@@ -281,9 +289,24 @@ class StreamProxy(private val client: HttpClient) {
         }
     }
 
-    private fun segmentProxyUrl(url: String, token: String?): String {
+    /** [credential] ya viene formado como "k=..." o "s=..." (ver credentialParamOf). */
+    private fun segmentProxyUrl(url: String, credential: String?): String {
         val base = "/stream/segment?src=" + URLEncoder.encode(url, "UTF-8")
-        return if (token.isNullOrBlank()) base else base + "&s=" + URLEncoder.encode(token, "UTF-8")
+        return if (credential.isNullOrBlank()) base else "$base&$credential"
+    }
+
+    /**
+     * Credencial de esta peticion, ya lista para pegar en una query: la clave
+     * interna del mux si la trae (VLC del escritorio, ffmpeg) o, si no, el token
+     * de sesion del navegador.
+     */
+    private fun credentialParamOf(call: ApplicationCall): String? {
+        val localKey = call.request.queryParameters[LocalMuxKey.PARAM]
+        if (localKey == LocalMuxKey.value) {
+            return "${LocalMuxKey.PARAM}=" + URLEncoder.encode(localKey, "UTF-8")
+        }
+        val session = RemoteAuth.sessionToken(call) ?: return null
+        return "s=" + URLEncoder.encode(session, "UTF-8")
     }
 
     companion object {

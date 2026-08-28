@@ -44,6 +44,7 @@ import io.ktor.server.routing.routing
 import io.ktor.util.pipeline.PipelineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -106,6 +107,9 @@ class RemoteWebServer(
     private var transcoder: AudioTranscoder? = null
     private var ffmpeg: String? = null
 
+    /** Corrutina que mata ffmpeg cuando nadie lo esta usando. */
+    private var transcoderJanitor: kotlinx.coroutines.Job? = null
+
     /** Cache de codec de audio por canal, para no lanzar un ffprobe por peticion. */
     private val audioCodecByChannel = java.util.concurrent.ConcurrentHashMap<String, String>()
 
@@ -127,8 +131,19 @@ class RemoteWebServer(
                 )
             } else {
                 val dir = File(System.getProperty("java.io.tmpdir"), "iptv-family-transcode")
-                transcoder = AudioTranscoder(ffmpeg!!, dir)
+                val tc = AudioTranscoder(ffmpeg!!, dir)
+                transcoder = tc
                 AppLog.d("RemoteServer", "conversion de audio lista (ffmpeg: $ffmpeg)")
+                // Vigilante de inactividad: sin esto, ffmpeg seguiria vivo para
+                // siempre despues de que el navegador se fuera, tirando del stream
+                // del proveedor sin que nadie lo mire (gasto de CPU, de datos y una
+                // conexion abierta contra el panel a cuenta de nada).
+                transcoderJanitor = scope.launch {
+                    while (true) {
+                        delay(15_000)
+                        tc.stopIfIdle()
+                    }
+                }
             }
         }
 
@@ -554,6 +569,8 @@ class RemoteWebServer(
         eventBus = null
         // Antes que el engine: hay que matar ffmpeg o quedaria un proceso huerfano
         // consumiendo CPU y red despues de apagar el servidor.
+        transcoderJanitor?.cancel()
+        transcoderJanitor = null
         transcoder?.stop()
         transcoder = null
         audioCodecByChannel.clear()
