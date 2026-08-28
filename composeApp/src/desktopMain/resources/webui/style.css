@@ -381,10 +381,11 @@ button { font: inherit; color: inherit; }
 /* Chips de grupos */
 .chips {
   display: flex; gap: 7px; align-items: center;
-  padding: 0 14px 12px; overflow-x: auto; flex: none;
-  scrollbar-width: none;
+  padding: 0 14px 12px; flex: none;
+  /* Con solo cuatro tipos caben siempre; si el idioma los alarga, que se
+     envuelvan en dos filas en vez de esconderse tras un scroll horizontal. */
+  flex-wrap: wrap;
 }
-.chips::-webkit-scrollbar { display: none; }
 .chip {
   flex: none; display: inline-flex; align-items: center; gap: 6px;
   padding: 6.5px 13px; border-radius: 999px;
@@ -399,6 +400,65 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 4px 16px rgba(99, 102, 241, .38);
 }
 .chip.is-active small { opacity: .85; }
+
+/* ─── Categorías ───────────────────────────────────────────────────────────
+   Son cientos. Antes se pintaban como una tira horizontal de chips con la
+   barra de scroll oculta, asi que con raton no habia forma de llegar a la
+   mayoria. Ahora: un boton que abre un panel con buscador y lista vertical. */
+.cat-bar { display: flex; gap: 6px; align-items: center; padding: 0 14px 10px; flex: none; }
+.cat-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
+  text-align: left; transition: border-color .15s ease, background .15s ease;
+}
+.cat-toggle:hover { border-color: var(--border-strong); }
+.cat-toggle .ic { width: 16px; height: 16px; flex: none; }
+.cat-toggle .caret { margin-left: auto; opacity: .6; transition: transform .18s ease; }
+.cat-toggle[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.cat-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-clear {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-soft); cursor: pointer;
+}
+.cat-clear:hover { color: var(--text); border-color: var(--border-strong); }
+.cat-clear .ic { width: 15px; height: 15px; }
+
+.cat-panel {
+  flex: none; margin: 0 14px 10px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  overflow: hidden; display: flex; flex-direction: column;
+  max-height: 46vh;
+}
+.cat-search { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--border); }
+.cat-search .ic { width: 15px; height: 15px; flex: none; opacity: .6; }
+.cat-search input {
+  flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+  color: var(--text); font-size: 13px; font-family: inherit;
+}
+.cat-list {
+  overflow-y: auto; padding: 5px;
+  display: flex; flex-direction: column; gap: 2px;
+  /* Barra de scroll VISIBLE a proposito: es la unica pista de que hay mas. */
+  scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
+}
+.cat-list::-webkit-scrollbar { width: 10px; }
+.cat-list::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+.cat-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--text-soft); font-size: 13px; font-family: inherit;
+  cursor: pointer; text-align: left;
+}
+.cat-item:hover { background: var(--surface-3); color: var(--text); }
+.cat-item.is-active { background: var(--accent-grad); color: #fff; font-weight: 600; }
+.cat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-count { flex: none; font-size: 11px; font-weight: 700; opacity: .6; }
+.cat-item.is-active .cat-count { opacity: .85; }
+.cat-empty { padding: 16px; text-align: center; color: var(--text-soft); font-size: 13px; }
 
 /* Lista de canales */
 .channel-list {

@@ -176,7 +176,30 @@
           <h2>Canales</h2>
           <span id="channels-count" class="count">0</span>
         </div>
-        <div id="group-chips" class="chips" role="tablist" aria-label="Grupos"></div>
+        <!-- Tipo de contenido: solo 4 opciones, siempre caben sin scroll. -->
+        <div id="kind-chips" class="chips chips-kind" role="tablist" aria-label="Tipo de contenido"></div>
+
+        <!-- Categorias: son cientos, asi que en vez de una tira horizontal
+             (inservible con raton) se abre un panel con buscador. -->
+        <div class="cat-bar">
+          <button type="button" id="cat-toggle" class="cat-toggle" aria-expanded="false" aria-controls="cat-panel">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+            <span id="cat-current" class="cat-current">Todas las categorías</span>
+            <svg class="ic caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <button type="button" id="cat-clear" class="cat-clear" title="Quitar el filtro de categoría"
+                  aria-label="Quitar el filtro de categoría" hidden>
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div id="cat-panel" class="cat-panel" hidden>
+          <div class="cat-search">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+            <input id="cat-search-input" type="search" placeholder="Buscar categoría…" autocomplete="off" spellcheck="false">
+          </div>
+          <div id="cat-list" class="cat-list" role="listbox" aria-label="Categorías"></div>
+        </div>
+
         <div id="channel-list" class="channel-list" role="list"></div>
         <div id="list-sentinel" class="list-sentinel" hidden aria-hidden="true"><span class="spinner small"></span></div>
         <div id="empty-state" class="empty-state" hidden>

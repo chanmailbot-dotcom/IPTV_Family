@@ -52,6 +52,14 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.iptv.family.shared.model.CategoryType
+
+/** Traduce el tipo de categoria del dominio al codigo corto que usa la web. */
+private fun kindOf(type: CategoryType): String = when (type) {
+    CategoryType.LIVE -> KIND_LIVE
+    CategoryType.VOD -> KIND_VOD
+    CategoryType.SERIES -> KIND_SERIES
+}
 
 /**
  * Parseo manual del body JSON: `receive<T>()` depende del plugin
@@ -743,13 +751,21 @@ class RemoteWebServer(
         // numero, y sin esta traduccion la web mostraba "142" como si fuera el
         // nombre del grupo.
         val nameById = appState.categories.associate { it.id to it.name }
+        val kindById = appState.categories.associate { it.id to kindOf(it.type) }
         val counts = HashMap<String, Int>()
         for (ch in appState.channels) {
             val gid = ch.group ?: continue
             counts[gid] = (counts[gid] ?: 0) + 1
         }
         val groups = counts.entries
-            .map { (id, count) -> GroupDto(id = id, name = nameById[id] ?: id, count = count) }
+            .map { (id, count) ->
+                GroupDto(
+                    id = id,
+                    name = nameById[id] ?: id,
+                    count = count,
+                    kind = kindById[id] ?: KIND_LIVE,
+                )
+            }
             .sortedBy { it.name.lowercase() }
 
         // Orden que el usuario espera: por numero de dial cuando el proveedor lo
@@ -765,6 +781,7 @@ class RemoteWebServer(
                     number = ch.number,
                     logoUrl = ch.logoUrl,
                     group = ch.group,
+                    kind = kindOf(ch.categoryType),
                 )
             }
 

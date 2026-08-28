@@ -43,14 +43,28 @@ data class ChannelDto(
     val logoUrl: String? = null,
     /** ID del grupo; el nombre legible se resuelve contra [StateDto.groups]. */
     val group: String? = null,
+    /**
+     * Tipo de contenido: "live", "vod" o "series". Permite a la web ofrecer el
+     * mismo filtro que la app de escritorio (TV en directo / Peliculas / Series).
+     *
+     * "live" es el valor por defecto y kotlinx no serializa los valores por
+     * defecto, asi que los canales de TV no ocupan nada extra en el payload.
+     */
+    val kind: String = KIND_LIVE,
 )
 
-/** Grupo con su nombre ya legible y cuantos canales tiene. */
+const val KIND_LIVE = "live"
+const val KIND_VOD = "vod"
+const val KIND_SERIES = "series"
+
+/** Grupo con su nombre ya legible, su tipo y cuantos canales tiene. */
 @Serializable
 data class GroupDto(
     val id: String,
     val name: String,
     val count: Int,
+    /** Mismo juego de valores que [ChannelDto.kind]. */
+    val kind: String = KIND_LIVE,
 )
 
 @OptIn(ExperimentalSerializationApi::class)

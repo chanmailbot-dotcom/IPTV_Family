@@ -18,7 +18,11 @@ const state = {
   groupNames: new Map(),// id de grupo → nombre legible (Xtream usa ids numéricos)
   favIds: new Set(),
   now: {},
-  group: null,          // grupo seleccionado (null = todos)
+  group: null,          // categoría seleccionada (null = todas)
+  groups: [],           // [{id, name, count, kind}] tal cual llega del servidor
+  kind: null,           // "live" | "vod" | "series"; null = todo
+  catOpen: false,       // panel de categorías desplegado
+  catQuery: "",         // filtro dentro del panel de categorías
   onlyFavs: false,
   query: "",
   visible: 0,           // nº de tarjetas renderizadas
@@ -154,12 +158,14 @@ function applyState(data) {
   state.role = data.role === "admin" ? "admin" : "viewer";
   state.username = data.username || null;
   state.channels = Array.isArray(data.channels) ? data.channels : [];
-  state.groupNames = new Map((data.groups || []).map((g) => [g.id, g.name]));
+  state.groups = Array.isArray(data.groups) ? data.groups : [];
+  state.groupNames = new Map(state.groups.map((g) => [g.id, g.name]));
   state.favIds = new Set(data.favoriteChannelIds || []);
   state.now = data.nowPlaying || {};
   $("playlist-name").textContent = data.playlistName || "Sin lista";
   applyRole();
-  renderChips();
+  renderKindChips();
+  renderCategories();
   resetList();
   applyNowPlaying(state.now);
 }
@@ -516,10 +522,14 @@ function teardownLocalVideo() {
 /** Nombre legible del grupo: en Xtream `ch.group` es un id numérico ("142"). */
 const groupLabel = (id) => (id ? (state.groupNames.get(id) || id) : "");
 
+/** Los canales de TV no traen `kind` en el JSON porque "live" es el defecto. */
+const kindOf = (ch) => ch.kind || "live";
+
 function filteredChannels() {
   const q = state.query.trim().toLowerCase();
   return state.channels.filter((ch) => {
     if (state.onlyFavs && !state.favIds.has(ch.id)) return false;
+    if (state.kind && kindOf(ch) !== state.kind) return false;
     if (state.group && ch.group !== state.group) return false;
     if (q) {
       // Buscar también por el nombre del grupo y por el número de dial, no por
@@ -533,21 +543,78 @@ function filteredChannels() {
   });
 }
 
-function renderChips() {
+const KINDS = [
+  { id: null, label: "Todo" },
+  { id: "live", label: "TV en directo" },
+  { id: "vod", label: "Películas" },
+  { id: "series", label: "Series" },
+];
+
+/** Fila de tipos de contenido. Son cuatro, asi que caben siempre. */
+function closeCategories() {
+  state.catOpen = false;
+  state.catQuery = "";
+  const input = $("cat-search-input");
+  if (input) input.value = "";
+  renderCategories();
+}
+
+function renderKindChips() {
   const counts = new Map();
   for (const ch of state.channels) {
-    if (!ch.group) continue;
-    counts.set(ch.group, (counts.get(ch.group) || 0) + 1);
+    const k = kindOf(ch);
+    counts.set(k, (counts.get(k) || 0) + 1);
   }
-  // Ordenar por el NOMBRE visible, no por el id.
-  const groups = [...counts.keys()].sort((a, b) => groupLabel(a).localeCompare(groupLabel(b), "es"));
-  const chip = (label, value, count) =>
-    `<button type="button" class="chip${state.group === value ? " is-active" : ""}" role="tab"`
-    + ` aria-selected="${state.group === value}" data-group="${escapeHtml(value ?? "")}">`
-    + `${escapeHtml(label)} <small>${count.toLocaleString("es")}</small></button>`;
-  $("group-chips").innerHTML =
-    chip("Todos", null, state.channels.length)
-    + groups.map((g) => chip(groupLabel(g), g, counts.get(g))).join("");
+  $("kind-chips").innerHTML = KINDS.map((k) => {
+    const n = k.id === null ? state.channels.length : (counts.get(k.id) || 0);
+    if (n === 0 && k.id !== null) return ""; // no ofrecer un filtro que no da nada
+    const on = state.kind === k.id;
+    return `<button type="button" class="chip${on ? " is-active" : ""}" role="tab"`
+      + ` aria-selected="${on}" data-kind="${k.id ?? ""}">`
+      + `${escapeHtml(k.label)} <small>${n.toLocaleString("es")}</small></button>`;
+  }).join("");
+}
+
+/**
+ * Categorias visibles: las del tipo elegido y que ademas casen con el buscador
+ * del panel. Antes esto era una tira horizontal de ~290 chips con la barra de
+ * scroll oculta por CSS, lo que la hacia inservible con raton.
+ */
+function visibleCategories() {
+  const q = state.catQuery.trim().toLowerCase();
+  return state.groups.filter((g) => {
+    if (state.kind && (g.kind || "live") !== state.kind) return false;
+    if (q && !g.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderCategories() {
+  // Si el tipo elegido ya no contiene la categoria activa, se suelta el filtro
+  // para no dejar la lista vacia sin explicacion.
+  if (state.group && !state.groups.some((g) => g.id === state.group && (!state.kind || (g.kind || "live") === state.kind))) {
+    state.group = null;
+  }
+  const chosen = state.groups.find((g) => g.id === state.group);
+  $("cat-current").textContent = chosen ? chosen.name : "Todas las categorías";
+  $("cat-clear").hidden = !state.group;
+  $("cat-toggle").setAttribute("aria-expanded", String(state.catOpen));
+  $("cat-panel").hidden = !state.catOpen;
+
+  const cats = visibleCategories();
+  const row = (id, name, count, active) =>
+    `<button type="button" class="cat-item${active ? " is-active" : ""}" role="option"`
+    + ` aria-selected="${active}" data-group="${escapeHtml(id ?? "")}">`
+    + `<span class="cat-name">${escapeHtml(name)}</span>`
+    + `<span class="cat-count">${count.toLocaleString("es")}</span></button>`;
+
+  const total = state.kind
+    ? cats.reduce((n, g) => n + g.count, 0)
+    : state.channels.length;
+  const head = state.catQuery.trim() ? "" : row(null, "Todas las categorías", total, !state.group);
+  const body = cats.map((g) => row(g.id, g.name, g.count, g.id === state.group)).join("");
+  $("cat-list").innerHTML = (head + body)
+    || `<p class="cat-empty">Ninguna categoría coincide</p>`;
 }
 
 function rowHtml(ch, activeId) {
@@ -769,13 +836,51 @@ function wireControls() {
     resetList();
   });
 
-  /* Chips de grupos (delegación) */
-  $("group-chips").addEventListener("click", (e) => {
+  /* Tipo de contenido (delegación) */
+  $("kind-chips").addEventListener("click", (e) => {
     const chipEl = e.target.closest(".chip");
     if (!chipEl) return;
-    state.group = chipEl.dataset.group || null;
-    renderChips();
+    state.kind = chipEl.dataset.kind || null;
+    renderKindChips();
+    renderCategories(); // el tipo acota qué categorías tienen sentido
     resetList();
+  });
+
+  /* Categorías: abrir/cerrar el panel, buscar dentro y elegir */
+  $("cat-toggle").addEventListener("click", () => {
+    state.catOpen = !state.catOpen;
+    renderCategories();
+    if (state.catOpen) $("cat-search-input").focus();
+  });
+
+  $("cat-clear").addEventListener("click", () => {
+    state.group = null;
+    renderCategories();
+    resetList();
+  });
+
+  $("cat-search-input").addEventListener("input", (e) => {
+    state.catQuery = e.target.value;
+    renderCategories();
+  });
+
+  $("cat-search-input").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeCategories(); $("cat-toggle").focus(); }
+  });
+
+  $("cat-list").addEventListener("click", (e) => {
+    const item = e.target.closest(".cat-item");
+    if (!item) return;
+    state.group = item.dataset.group || null;
+    closeCategories();
+    resetList();
+  });
+
+  // Clic fuera del panel: cerrarlo, como cualquier desplegable.
+  document.addEventListener("click", (e) => {
+    if (!state.catOpen) return;
+    if (e.target.closest("#cat-panel") || e.target.closest("#cat-toggle")) return;
+    closeCategories();
   });
 
   /* Lista de canales (delegación: play + favorito + teclado) */
