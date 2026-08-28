@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Parser del estándar XMLTV (guía electrónica de programas) para escritorio.
+ * Parser del estándar XMLTV (guía electrónica de programas).
  *
  * Espera un documento XMLTV como:
  *   <tv>
@@ -22,6 +22,10 @@ import javax.xml.parsers.DocumentBuilderFactory
  *       <icon src="http://..."/>
  *     </programme>
  *   </tv>
+ *
+ * Los [EPGProgram] resultantes se referencian por `channelId` (el atributo
+ * `channel`), que es el mismo `tvg-id` de las listas M3U y el `stream_id` de
+ * Xtream, de modo que la UI cruza canal <-> programa sin transformaciones.
  */
 class XmltvParser {
 
@@ -31,13 +35,20 @@ class XmltvParser {
         if (xmltvContent.isBlank()) return emptyList()
 
         val factory = DocumentBuilderFactory.newInstance()
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        // Blindaje XXE sin rechazar DOCTYPE: muchas guias XMLTV reales traen
+        // <!DOCTYPE tv SYSTEM "xmltv.dtd"> y con disallow-doctype-decl no se
+        // podrian parsear. Se deja el DOCTYPE presente pero inerte: no se
+        // cargan DTDs externos, no se resuelven entidades externas y no se
+        // expanden entidades internas (anti billion-laughs).
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+        factory.isExpandEntityReferences = false
+        factory.isXIncludeAware = false
         val builder = factory.newDocumentBuilder()
         val document = builder.parse(InputSource(StringReader(xmltvContent)))
         val root = document.documentElement
 
-        // Mapa de nombres de canal por id (guía útil para la UI).
-        // (Los EPGProgram referencian channelId; el nombre se resuelve en UI.)
         val programmes = root.filterElementNodes("programme")
         return programmes.mapNotNull { p ->
             val channelId = p.getAttribute("channel")
@@ -111,7 +122,7 @@ class XmltvParser {
     }
 
     private fun String.toZoneOffset(): ZoneOffset {
-        // acepta "+0100", "-0500", alto gélido "+00:00" (normalizar)
+        // acepta "+0100", "-0500" y "+00:00" (normalizado)
         val normalized = removePrefix("+").removePrefix("-").replace(":", "")
         val hours = normalized.take(2).toIntOrNull() ?: 0
         val minutes = normalized.drop(2).take(2).toIntOrNull() ?: 0

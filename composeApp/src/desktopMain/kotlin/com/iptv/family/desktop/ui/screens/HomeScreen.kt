@@ -1,9 +1,11 @@
 package com.iptv.family.desktop.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +48,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
+import com.iptv.family.desktop.ui.AppStrings
 import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
 import kotlinx.coroutines.CoroutineScope
@@ -66,9 +69,9 @@ fun HomeScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Mis listas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(AppStrings.Home.TITLE, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Añade tu lista M3U o tus datos de Xtream Codes y empieza a ver la tele.",
+                    AppStrings.Home.SUBTITLE,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -76,7 +79,7 @@ fun HomeScreen(
             Button(onAddClick) {
                 Icon(Icons.Rounded.Add, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text("Añadir lista")
+                Text(AppStrings.Home.ADD)
             }
         }
 
@@ -94,7 +97,7 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton({ scope.launch { appState.refresh() } }) { Text("Reintentar") }
+                TextButton({ scope.launch { appState.refresh() } }) { Text(AppStrings.RETRY) }
             }
         }
 
@@ -120,15 +123,15 @@ fun HomeScreen(
     pendingDelete?.let { playlist ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Eliminar lista") },
-            text = { Text("¿Seguro que quieres eliminar «${playlist.name}»? Sus favoritos se mantienen.") },
+            title = { Text(AppStrings.Home.DELETE_TITLE) },
+            text = { Text(AppStrings.Home.deleteConfirm(playlist.name)) },
             confirmButton = {
                 Button({
                     scope.launch { appState.deletePlaylist(playlist.id) }
                     pendingDelete = null
-                }) { Text("Eliminar") }
+                }) { Text(AppStrings.Home.DELETE) }
             },
-            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancelar") } },
+            dismissButton = { TextButton({ pendingDelete = null }) { Text(AppStrings.CANCEL) } },
         )
     }
 }
@@ -146,6 +149,7 @@ private fun PlaylistCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val focused by interaction.collectIsFocusedAsState()
 
     Row(
         Modifier
@@ -157,6 +161,10 @@ private fun PlaylistCard(
                     else -> MaterialTheme.colorScheme.surfaceContainer
                 },
                 MaterialTheme.shapes.large,
+            )
+            .then(
+                if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.large)
+                else Modifier,
             )
             .hoverable(interaction)
             .pointerHoverIcon(PointerIcon.Hand)
@@ -201,15 +209,15 @@ private fun PlaylistCard(
             Button(onOpen) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
-                Text("Ver canales")
+                Text(AppStrings.Home.VIEW_CHANNELS)
             }
-            IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, contentDescription = "Actualizar lista") }
+            IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, contentDescription = AppStrings.Home.REFRESH) }
         }
 
         IconButton(onDelete) {
             Icon(
                 Icons.Rounded.Delete,
-                contentDescription = "Eliminar lista",
+                contentDescription = AppStrings.Home.DELETE,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -232,10 +240,9 @@ private fun EmptyState(onAddClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(40.dp),
         )
-        Text("Todavía no hay ninguna lista", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(AppStrings.Home.EMPTY_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "Tu proveedor te da o una URL que acaba en .m3u, o un panel con usuario y contraseña " +
-                "(Xtream Codes). Sirven las dos.",
+            AppStrings.Home.EMPTY_BODY,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -243,7 +250,7 @@ private fun EmptyState(onAddClick: () -> Unit) {
         Button(onAddClick) {
             Icon(Icons.Rounded.Add, contentDescription = null)
             Spacer(Modifier.width(6.dp))
-            Text("Añadir mi primera lista")
+            Text(AppStrings.Home.ADD_FIRST)
         }
     }
 }

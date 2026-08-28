@@ -1,10 +1,12 @@
 package com.iptv.family.desktop.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.iptv.family.shared.model.ThemeType
 
 // Mismos tonos que el icono de la app (badge degradado indigo -> verde azulado):
 // mantiene una sola identidad de marca entre el icono, escritorio y Android.
@@ -65,8 +67,24 @@ private val Light = lightColorScheme(
 
 enum class AppThemeMode { LIGHT, DARK }
 
+/**
+ * Tema de la aplicacion.
+ *
+ * Acepta el [ThemeType] compartido (LIGHT / DARK / SYSTEM) y resuelve SYSTEM
+ * en tiempo de composicion mirando el tema del escritorio con
+ * [isSystemInDarkTheme]. Como `settings.selectedTheme` es estado de Compose y
+ * llega como parametro, cambiar el selector en Ajustes recompone al instante.
+ */
 @Composable
-fun AppTheme(mode: AppThemeMode = AppThemeMode.DARK, content: @Composable () -> Unit) {
+fun AppTheme(
+    theme: ThemeType = ThemeType.DARK,
+    content: @Composable () -> Unit,
+) {
+    val mode = when (theme) {
+        ThemeType.LIGHT -> AppThemeMode.LIGHT
+        ThemeType.DARK -> AppThemeMode.DARK
+        ThemeType.SYSTEM -> if (isSystemInDarkTheme()) AppThemeMode.DARK else AppThemeMode.LIGHT
+    }
     MaterialTheme(
         colorScheme = if (mode == AppThemeMode.LIGHT) Light else Dark,
         content = content,

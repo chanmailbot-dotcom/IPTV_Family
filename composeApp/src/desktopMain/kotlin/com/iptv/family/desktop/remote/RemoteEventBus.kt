@@ -50,13 +50,26 @@ class RemoteEventBus(
     fun currentNowPlaying(): NowPlayingDto {
         val url = controller?.currentUrl
         val channel = url?.let { u -> appState.channels.find { it.url == u } }
+        val current = channel?.let { appState.currentProgram(it) }
+        val next = channel?.let { appState.nextProgram(it) }
         return NowPlayingDto(
             channelId = channel?.id,
             channelName = channel?.name,
+            channelNumber = channel?.number,
             logoUrl = channel?.logoUrl,
+            // `Channel.group` es el id de categoria (en Xtream, un numero): hay que
+            // resolverlo a nombre o la web muestra "142" en vez de "Deportes".
+            group = channel?.group?.let { gid ->
+                appState.categories.firstOrNull { it.id == gid }?.name ?: gid
+            },
             isPlaying = controller?.isPlaying ?: false,
             isBuffering = controller?.isBuffering ?: false,
             error = controller?.error,
+            volume = controller?.volume ?: 0,
+            isMuted = controller?.isMuted ?: false,
+            epgNow = current?.title,
+            epgNext = next?.title,
+            epgEndsAt = current?.endTime?.takeIf { it > 0 },
         )
     }
 

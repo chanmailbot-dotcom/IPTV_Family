@@ -25,6 +25,15 @@ local.properties
 # App local data
 *.sqlite
 *.db
+
+# Logs y restos de depuracion en la raiz del repo (salidas de gradlew, volcados
+# de la JVM, capturas de manifiestos y cookies de pruebas con curl)
+/*.log
+composeApp/hs_err_pid*.log
+hs_err_pid*.log
+replay_pid*.log
+cookie_test.txt
+mux_test.m3u8
 # Runtime de VLC descargado durante el empaquetado (ver scripts/fetch-vlc.ps1)
 composeApp/resources/windows-x64/
 composeApp/resources/linux-x64/

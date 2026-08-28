@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import com.iptv.family.player.ExoPlayerController
 import com.iptv.family.shared.data.repository.LibraryRepository
 import com.iptv.family.shared.data.store.FileKeyValueStore
@@ -76,6 +77,20 @@ class MainActivity : ComponentActivity() {
             val scope = rememberCoroutineScope()
 
             LaunchedEffect(Unit) { appState.loadAll() }
+
+            // Carga la guia EPG (XMLTV) cuando cambia la lista activa; en Xtream usa
+            // la url estandar del panel si el usuario no puso una.
+            LaunchedEffect(appState.selectedPlaylistId) {
+                appState.loadEpg()
+            }
+
+            // Refresco periodico del EPG: que "Ahora" cambie de programa al pasar el tiempo.
+            LaunchedEffect(Unit) {
+                while (true) {
+                    delay(30_000)
+                    appState.bumpEpgTick()
+                }
+            }
 
             // Carga el canal sin navegar a pantalla completa: la usa la previsualizacion
             // por foco en "TV en vivo" y la miniatura persistente en el resto de secciones.

@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,7 +46,7 @@ import com.iptv.family.desktop.player.VlcController
 import com.iptv.family.desktop.remote.RemoteWebServer
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.desktop.theme.AppTheme
-import com.iptv.family.desktop.theme.AppThemeMode
+import com.iptv.family.desktop.ui.AppStrings
 import com.iptv.family.desktop.ui.screens.AddPlaylistDialog
 import com.iptv.family.desktop.ui.screens.ChannelsScreen
 import com.iptv.family.desktop.ui.screens.FavoritesScreen
@@ -56,16 +57,15 @@ import com.iptv.family.shared.data.repository.LibraryRepository
 import com.iptv.family.shared.data.store.FileKeyValueStore
 import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Channel
-import com.iptv.family.shared.model.ThemeType
 import kotlinx.coroutines.launch
 import java.io.File
 
 private enum class Destination(val label: String, val icon: ImageVector) {
-    HOME("Mis listas", Icons.Rounded.VideoLibrary),
-    CHANNELS("Canales", Icons.Rounded.LiveTv),
-    FAVORITES("Favoritos", Icons.Rounded.Favorite),
-    PLAYER("Reproduciendo", Icons.Rounded.PlayCircle),
-    SETTINGS("Ajustes", Icons.Rounded.Settings),
+    HOME(AppStrings.Nav.HOME, Icons.Rounded.VideoLibrary),
+    CHANNELS(AppStrings.Nav.CHANNELS, Icons.Rounded.LiveTv),
+    FAVORITES(AppStrings.Nav.FAVORITES, Icons.Rounded.Favorite),
+    PLAYER(AppStrings.Nav.PLAYER, Icons.Rounded.PlayCircle),
+    SETTINGS(AppStrings.Nav.SETTINGS, Icons.Rounded.Settings),
 }
 
 fun main() = application {
@@ -86,15 +86,20 @@ fun main() = application {
     }
 
     val remoteScope = rememberCoroutineScope()
-    val remoteServer = remember { RemoteWebServer(appState, controller, remoteScope) }
+    // Clave `controller`: al cambiar el modo compatibilidad se construye otro
+    // VlcController y se libera el viejo. Sin esta clave el servidor web seguia
+    // apuntando al controller ya liberado y la web se quedaba muda/negra hasta
+    // reiniciar la app.
+    val remoteServer = remember(controller) { RemoteWebServer(appState, controller, remoteScope) }
     val webServerEnabled = appState.settings.enableWebServer
     val webServerPort = appState.settings.webServerPort
-    DisposableEffect(webServerEnabled, webServerPort) {
+    // `remoteServer` va en las claves: cuando se sustituye la instancia hay que
+    // parar la anterior (onDispose) antes de levantar la nueva, o el puerto
+    // seguiria ocupado por el engine viejo y la nueva no podria escuchar.
+    DisposableEffect(remoteServer, webServerEnabled, webServerPort) {
         if (webServerEnabled) {
             runCatching { remoteServer.start(webServerPort) }
                 .onFailure { AppLog.e("Main", "No se pudo iniciar el servidor web", it) }
-        } else {
-            remoteServer.stop()
         }
         onDispose { remoteServer.stop() }
     }
@@ -113,19 +118,49 @@ fun main() = application {
         windowState.placement = if (isFullscreen) WindowPlacement.Fullscreen else WindowPlacement.Floating
     }
 
+    // Carga la guia EPG (XMLTV) cuando cambia la lista activa; en Xtream usa
+    // la url estandar del panel si el usuario no puso una.
+    LaunchedEffect(appState.selectedPlaylistId) {
+        appState.loadEpg()
+    }
+
+    // Solo navega: PlayerScreen arranca el stream cuando su superficie existe.
+    fun play(channel: Channel, list: List<Channel>) {
+        AppLog.d("Main", "Usuario pide reproducir '${channel.name}' (${AppLog.redactUrl(channel.url)})")
+        playing = channel
+        zapList = list
+        destination = Destination.PLAYER
+    }
+
+    // Zapeo circular sobre la lista con la que se empezo a reproducir.
+    fun zap(delta: Int) {
+        val current = playing ?: return
+        if (zapList.isEmpty()) return
+        val index = zapList.indexOfFirst { it.id == current.id }
+        play(zapList[(index + delta).mod(zapList.size)], zapList)
+    }
+
     Window(
         onCloseRequest = {
+            // El servidor web tiene el puerto abierto y un pool de corrutinas: si no
+            // se para aqui, cerrar la ventana deja el proceso vivo en segundo plano.
+            remoteServer.stop()
             controller?.release()
             exitApplication()
         },
         state = windowState,
-        title = playing?.let { "${it.name} · IPTV Family" } ?: "IPTV Family",
+        title = playing?.let { "${it.name} ${AppStrings.WINDOW_TITLE_SUFFIX}" } ?: AppStrings.APP_TITLE,
         onKeyEvent = { event ->
             if (event.type != KeyEventType.KeyDown) return@Window false
             when {
                 event.key == Key.Escape && isFullscreen -> { isFullscreen = false; true }
                 event.key == Key.F && playing != null -> { isFullscreen = !isFullscreen; true }
                 event.key == Key.Spacebar && playing != null -> { controller?.togglePlayPause(); true }
+                event.key == Key.M && playing != null -> { controller?.changeMuted(controller?.isMuted != true); true }
+                event.key == Key.DirectionUp && playing != null -> { controller?.changeVolume((controller?.volume ?: 80) + 5); true }
+                event.key == Key.DirectionDown && playing != null -> { controller?.changeVolume((controller?.volume ?: 80) - 5); true }
+                event.key == Key.N && playing != null -> { zap(+1); true }
+                event.key == Key.P && playing != null -> { zap(-1); true }
                 else -> false
             }
         },
@@ -133,21 +168,17 @@ fun main() = application {
         val scope = rememberCoroutineScope()
         LaunchedEffect(Unit) { appState.loadAll() }
 
-        val mode = if (appState.settings.selectedTheme == ThemeType.LIGHT) AppThemeMode.LIGHT else AppThemeMode.DARK
-
-        // Solo navega: PlayerScreen arranca el stream cuando su superficie existe.
-        fun play(channel: Channel, list: List<Channel>) {
-            AppLog.d("Main", "Usuario pide reproducir '${channel.name}' (${AppLog.redactUrl(channel.url)})")
-            playing = channel
-            zapList = list
-            destination = Destination.PLAYER
-        }
-
         // El servidor remoto reusa siempre la misma funcion play() que la UI local,
         // asi que un cambio de canal desde el navegador se refleja igual que uno local.
-        remoteServer.onRemotePlayRequest = { channel -> play(channel, appState.channels) }
+        // En SideEffect y no en el cuerpo: asignar estado externo durante la
+        // composicion se ejecuta tambien en composiciones descartadas.
+        SideEffect {
+            remoteServer.onRemotePlayRequest = { channel -> play(channel, appState.channels) }
+        }
 
-        AppTheme(mode) {
+        // El tema Sistema se resuelve dentro de AppTheme (isSystemInDarkTheme),
+        // asi que aqui solo pasamos la preferencia del usuario.
+        AppTheme(appState.settings.selectedTheme) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Row(Modifier.fillMaxSize()) {
                     if (!isFullscreen) {
@@ -159,7 +190,7 @@ fun main() = application {
                                 NavigationRailItem(
                                     selected = destination == entry,
                                     onClick = { destination = entry },
-                                    icon = { Icon(entry.icon, contentDescription = null) },
+                                    icon = { Icon(entry.icon, contentDescription = entry.label) },
                                     label = { Text(entry.label, style = MaterialTheme.typography.labelSmall) },
                                 )
                             }
@@ -222,8 +253,8 @@ fun main() = application {
                 AddPlaylistDialog(
                     scope = scope,
                     onDismiss = { showAddDialog = false },
-                    onAddM3uUrl = { name, url -> scope.launch { appState.addM3uUrl(name, url) } },
-                    onAddXtream = { name, url, user, pass -> scope.launch { appState.addXtream(name, url, user, pass) } },
+                    onAddM3uUrl = { name, url, epg -> scope.launch { appState.addM3uUrl(name, url, epg) } },
+                    onAddXtream = { name, url, user, pass, epg -> scope.launch { appState.addXtream(name, url, user, pass, epg) } },
                     onAddM3uFile = { name, content -> scope.launch { appState.addM3uFile(name, content) } },
                     onChooseFile = FilePicker::chooseM3uFile,
                 )

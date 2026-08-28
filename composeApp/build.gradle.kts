@@ -35,6 +35,8 @@ kotlin {
                 implementation("io.ktor:ktor-server-core:$ktorVersion")
                 implementation("io.ktor:ktor-server-cio:$ktorVersion")
                 implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
+                // Comprime el JSON de estado (una lista de 40.000 canales son ~7 MB).
+                implementation("io.ktor:ktor-server-compression:$ktorVersion")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
                 // Cliente HTTP para el proxy del stream hacia el proveedor.
                 implementation("io.ktor:ktor-client-core:$ktorVersion")

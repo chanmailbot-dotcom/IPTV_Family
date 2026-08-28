@@ -45,14 +45,15 @@ enum class AddMode(val label: String) {
 fun AddPlaylistDialog(
     scope: CoroutineScope,
     onDismiss: () -> Unit,
-    onAddM3uUrl: (name: String, url: String) -> Unit,
-    onAddXtream: (name: String, url: String, user: String, pass: String) -> Unit,
+    onAddM3uUrl: (name: String, url: String, epgUrl: String?) -> Unit,
+    onAddXtream: (name: String, url: String, user: String, pass: String, epgUrl: String?) -> Unit,
     onAddM3uFile: (name: String, content: String) -> Unit,
     onChooseFile: () -> String?,
 ) {
     var name by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf(AddMode.URL_M3U) }
     var url by remember { mutableStateOf("") }
+    var epgUrl by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var filePath by remember { mutableStateOf<String?>(null) }
@@ -166,7 +167,26 @@ fun AddPlaylistDialog(
                     }
                 }
 
+                if (mode == AddMode.URL_M3U || mode == AddMode.XTREAM) {
+                    OutlinedTextField(
+                        value = epgUrl,
+                        onValueChange = { epgUrl = it },
+                        label = { Text("URL de la guía EPG (XMLTV) — opcional") },
+                        placeholder = { Text("http://…/xmltv.php?username=…&password=…") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
                 Spacer(Modifier.height(2.dp))
+                OutlinedTextField(
+                    value = epgUrl,
+                    onValueChange = { epgUrl = it },
+                    label = { Text("Guía EPG (opcional)") },
+                    placeholder = { Text("http://…/xmltv.php — déjalo vacío en Xtream") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Text(
                     when (mode) {
                         AddMode.URL_M3U -> "La URL que te dio tu proveedor, normalmente acaba en .m3u o .m3u8."
@@ -182,8 +202,8 @@ fun AddPlaylistDialog(
             Button(
                 onClick = {
                     when (mode) {
-                        AddMode.URL_M3U -> onAddM3uUrl(name.trim(), url.trim())
-                        AddMode.XTREAM -> onAddXtream(name.trim(), url.trim(), user.trim(), pass)
+                        AddMode.URL_M3U -> onAddM3uUrl(name.trim(), url.trim(), epgUrl.trim())
+                        AddMode.XTREAM -> onAddXtream(name.trim(), url.trim(), user.trim(), pass, epgUrl.trim())
                         AddMode.FILE -> fileContent?.let { onAddM3uFile(name.trim(), it) }
                     }
                     onDismiss()

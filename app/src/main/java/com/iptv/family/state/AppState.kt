@@ -4,9 +4,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.iptv.family.shared.data.repository.LibraryRepository
+import com.iptv.family.shared.data.xmltv.CommonEpgCache
 import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
+import com.iptv.family.shared.model.EPGProgram
 import com.iptv.family.shared.model.FavoriteChannel
 import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
@@ -42,6 +44,13 @@ class AppState(
     var error by mutableStateOf<String?>(null)
         private set
 
+    // EPG (guia XMLTV) cacheada en shared; se comparte con el escritorio.
+    private val epgCache = CommonEpgCache()
+    /** Marca de refresco: las filas que muestran "Ahora" dependen de ella. */
+    var epgTick by mutableStateOf(0L)
+        private set
+    val isEpgLoaded: Boolean get() = epgCache.isLoaded
+
     val selectedPlaylist: Playlist? get() = playlists.find { it.id == selectedPlaylistId }
 
     suspend fun loadAll() {
@@ -58,13 +67,14 @@ class AppState(
     private fun newId(): String =
         "pl-${System.currentTimeMillis()}-${Random.nextInt(1000)}"
 
-    suspend fun addM3uUrl(name: String, url: String) {
+    suspend fun addM3uUrl(name: String, url: String, epgUrl: String? = null) {
         require(name.isNotBlank()) { "El nombre es obligatorio" }
         val pl = Playlist(
             id = newId(),
             name = name,
             type = SourceType.M3U_URL,
             m3uUrl = url,
+            epgUrl = epgUrl?.trim()?.takeIf { it.isNotEmpty() },
             isActive = true,
             lastUpdated = System.currentTimeMillis(),
         )
@@ -73,7 +83,7 @@ class AppState(
         selectPlaylist(pl.id)
     }
 
-    suspend fun addXtream(name: String, url: String, user: String, pass: String) {
+    suspend fun addXtream(name: String, url: String, user: String, pass: String, epgUrl: String? = null) {
         require(name.isNotBlank()) { "El nombre es obligatorio" }
         require(url.isNotBlank() && user.isNotBlank()) { "URL y usuario son obligatorios" }
         val pl = Playlist(
@@ -83,6 +93,7 @@ class AppState(
             xtreamUrl = url,
             xtreamUser = user,
             xtreamPass = pass,
+            epgUrl = epgUrl?.trim()?.takeIf { it.isNotEmpty() },
             isActive = true,
             lastUpdated = System.currentTimeMillis(),
         )
@@ -182,6 +193,44 @@ class AppState(
         val playlist = selectedPlaylist ?: return emptyList()
         return repository.getSeriesEpisodes(playlist, seriesId)
     }
+
+    // ------------------------------------------------------------------
+    // EPG (guia de programas)
+    // ------------------------------------------------------------------
+
+    /**
+     * URL de la guia XMLTV de la playlist: la que puso el usuario o, en
+     * Xtream sin URL explicita, la estandar del panel (`xmltv.php`), que
+     * comparte host/credenciales con la propia lista.
+     */
+    fun epgUrlFor(playlist: Playlist?): String? {
+        playlist ?: return null
+        playlist.epgUrl?.trim().takeUnless { it.isNullOrEmpty() }?.let { return it }
+        if (playlist.type == SourceType.XTREAM) {
+            val base = playlist.xtreamUrl?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
+            val scheme = if (base.startsWith("https://", true)) "https" else "http"
+            val host = base.removePrefix("https://").removePrefix("http://").trimEnd('/')
+            return "$scheme://$host/xmltv.php?username=${playlist.xtreamUser}&password=${playlist.xtreamPass}"
+        }
+        return null
+    }
+
+    /** Descarga la guia si toca (TTL interno). Si falla, se sigue sin EPG. */
+    suspend fun loadEpg(forceRefresh: Boolean = false) {
+        epgCache.ensureLoaded(epgUrlFor(selectedPlaylist), forceRefresh)
+        epgTick = System.currentTimeMillis()
+    }
+
+    /** Fuerza a recomponer las filas con EPG (refresco periodico de "Ahora"). */
+    fun bumpEpgTick() {
+        epgTick = System.currentTimeMillis()
+    }
+
+    fun currentProgram(channel: Channel?): EPGProgram? =
+        channel?.let { epgCache.currentFor(it.epgChannelId) }
+
+    fun nextProgram(channel: Channel?): EPGProgram? =
+        channel?.let { epgCache.nextFor(it.epgChannelId) }
 
     suspend fun mutateSettings(block: UserSettings.() -> UserSettings) {
         settings = settings.block()

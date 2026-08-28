@@ -8,10 +8,21 @@ data class Channel(
     val name: String,
     val url: String,
     val logoUrl: String? = null,
+    /**
+     * ID de la categoria a la que pertenece (casa con [Category.id]). En Xtream
+     * es un numero ("142"), NO el nombre legible: para mostrarlo al usuario hay
+     * que resolverlo contra la lista de [Category] (ver `Category.name`).
+     */
     val group: String? = null,
     val epgChannelId: String? = null,
     val isFavorite: Boolean = false,
-    val categoryType: CategoryType = CategoryType.LIVE
+    val categoryType: CategoryType = CategoryType.LIVE,
+    /**
+     * Numero de canal que publica el proveedor (`num` en Xtream, `tvg-chno` en
+     * M3U). Es el orden que el usuario espera ver -- sin esto la lista sale en
+     * el orden crudo de la respuesta del panel.
+     */
+    val number: Int? = null
 )
 
 @Serializable
@@ -45,6 +56,7 @@ data class Playlist(
     val name: String,
     val type: SourceType,
     val m3uUrl: String? = null,
+    val epgUrl: String? = null,
     val xtreamUrl: String? = null,
     val xtreamUser: String? = null,
     val xtreamPass: String? = null,
@@ -73,7 +85,14 @@ data class UserSettings(
     val autoPlayNext: Boolean = true,
     val enableWebServer: Boolean = false,
     val webServerPort: Int = 8080,
-    val webServerToken: String? = null
+    /** Token de ADMINISTRADOR: control total (cambiar canal, favoritos, volumen...). */
+    val webServerToken: String? = null,
+    /**
+     * Token de INVITADO: solo ver lo que el administrador ha puesto. No puede
+     * cambiar de canal ni tocar el reproductor; si es null, no hay acceso de
+     * invitado y solo entra quien tenga el token de administrador.
+     */
+    val webViewerToken: String? = null
 )
 
 @Serializable

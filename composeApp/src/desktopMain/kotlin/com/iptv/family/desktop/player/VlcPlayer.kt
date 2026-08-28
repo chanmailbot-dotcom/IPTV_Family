@@ -89,7 +89,7 @@ class VlcController(compatibilityMode: Boolean = false) {
     var error by mutableStateOf<String?>(null)
         private set
     var currentUrl by mutableStateOf<String?>(null)
-        private set
+
     private var volumeState by mutableStateOf(80)
     private var mutedState by mutableStateOf(false)
 
@@ -145,6 +145,14 @@ class VlcController(compatibilityMode: Boolean = false) {
                 isPlaying = true
                 isBuffering = false
                 error = null
+                // libvlc ignora setVolume/isMute mientras no hay medio abierto: el
+                // valor puesto en init o antes del play() se perdia y el volumen
+                // volvia al de la libreria. Se reaplica aqui, que es el primer
+                // momento en que el reproductor lo acepta de verdad.
+                runCatching {
+                    mp.audio().setVolume(volumeState)
+                    mp.audio().isMute = mutedState
+                }
             }
 
             override fun paused(mp: MediaPlayer) {
@@ -185,23 +193,35 @@ class VlcController(compatibilityMode: Boolean = false) {
     val isSurfaceReady: Boolean get() = component.isDisplayable
 
     /**
-     * Abre [url]. [networkCachingMs] es el buffer de red, en milisegundos.
+     * Abre [url] (URL de origen; es la identidad del canal en toda la app).
+     * Si [playbackUrl] no es null, libvlc reproduce ESA url en su lugar (p.ej. el
+     * multiplexor local `http://127.0.0.1/puerto/stream/current.m3u8`) mientras
+     * [url] sigue siendo la referencia para zapeo, historial y el proxy web.
      *
      * Requiere que la superficie de video ya este en pantalla: libvlc lanza
      * "video surface component must be displayable" si se le pide antes.
      */
-    fun play(url: String, networkCachingMs: Int = 15_000, hardwareDecoding: Boolean = true) {
+    fun play(
+        url: String,
+        networkCachingMs: Int = 15_000,
+        hardwareDecoding: Boolean = true,
+        playbackUrl: String? = null,
+    ) {
         if (url.isBlank()) return
+        val media = playbackUrl?.takeIf { it.isNotBlank() } ?: url
         AppLog.d(
             "Vlc",
-            "play: ${AppLog.redactUrl(url)} (surfaceReady=$isSurfaceReady, caching=${networkCachingMs}ms, hw=$hardwareDecoding)"
+            "play: ${AppLog.redactUrl(url)} via ${AppLog.redactUrl(media)} (surfaceReady=$isSurfaceReady, caching=${networkCachingMs}ms, hw=$hardwareDecoding)"
         )
         error = null
         isBuffering = true
         currentUrl = url
+        // Se recuerdan los argumentos para poder volver a arrancar este mismo canal
+        // despues de un stop() (ver togglePlayPause).
+        lastPlayArgs = PlayArgs(url, networkCachingMs, hardwareDecoding, playbackUrl)
         val options = mutableListOf(":network-caching=$networkCachingMs")
         if (!hardwareDecoding) options += ":avcodec-hw=none"
-        runCatching { player.media().play(url, *options.toTypedArray()) }
+        runCatching { player.media().play(media, *options.toTypedArray()) }
             .onFailure {
                 AppLog.e("Vlc", "play: fallo al invocar player.media().play()", it)
                 isBuffering = false
@@ -210,8 +230,21 @@ class VlcController(compatibilityMode: Boolean = false) {
     }
 
     fun togglePlayPause() {
-        if (currentUrl == null) return
-        player.controls().pause()
+        if (isPlaying) {
+            player.controls().pause()
+            return
+        }
+        // Tras un stop() libvlc ya no tiene medio: `controls().play()` no hace nada.
+        // Antes esto dejaba el reproductor muerto (el boton de play no respondia y
+        // habia que cambiar de canal para recuperarlo); ahora se vuelve a abrir el
+        // ultimo canal con los mismos ajustes.
+        if (currentUrl == null) {
+            val args = lastPlayArgs ?: return
+            play(args.url, args.networkCachingMs, args.hardwareDecoding, args.playbackUrl)
+            return
+        }
+        // Reanuda tras una pausa: en directo, libvlc sigue por donde iba el buffer.
+        player.controls().play()
     }
 
     fun stop() {
@@ -220,6 +253,15 @@ class VlcController(compatibilityMode: Boolean = false) {
         isPlaying = false
         isBuffering = false
     }
+
+    private data class PlayArgs(
+        val url: String,
+        val networkCachingMs: Int,
+        val hardwareDecoding: Boolean,
+        val playbackUrl: String?,
+    )
+
+    private var lastPlayArgs: PlayArgs? = null
 
     fun changeVolume(value: Int) {
         volume = value.coerceIn(0, 100)

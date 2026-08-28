@@ -15,6 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -51,13 +54,25 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
         Text("Ajustes", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
         Section("Aspecto") {
-            ToggleRow(
-                title = "Tema oscuro",
-                subtitle = "Recomendado para ver la tele de noche",
-                checked = settings.selectedTheme != ThemeType.LIGHT,
-            ) { dark ->
-                scope.launch {
-                    appState.mutateSettings { copy(selectedTheme = if (dark) ThemeType.DARK else ThemeType.LIGHT) }
+            Text("Tema", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Claro, oscuro, o sigue la configuración del sistema.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val themeChoices = listOf(
+                ThemeType.SYSTEM to "Sistema",
+                ThemeType.LIGHT to "Claro",
+                ThemeType.DARK to "Oscuro",
+            )
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                themeChoices.forEachIndexed { index, (type, label) ->
+                    SegmentedButton(
+                        selected = settings.selectedTheme == type,
+                        onClick = { scope.launch { appState.mutateSettings { copy(selectedTheme = type) } } },
+                        shape = SegmentedButtonDefaults.itemShape(index, themeChoices.size),
+                        label = { Text(label) },
+                    )
                 }
             }
         }
@@ -167,35 +182,54 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
             }
 
             if (settings.enableWebServer && !settings.webServerToken.isNullOrBlank()) {
-                Text(
-                    "Token de acceso (pídelo en el navegador remoto la primera vez):",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(settings.webServerToken.orEmpty(), style = MaterialTheme.typography.bodyLarge)
-                    TextButton({ clipboard.setText(AnnotatedString(settings.webServerToken.orEmpty())) }) { Text("Copiar") }
-                    TextButton({
+                // Las IPs de red no cambian mientras la pantalla esta abierta: enumerar
+                // las interfaces en cada recomposicion era trabajo de red por fotograma.
+                val lanIps = remember { localLanAddresses() }
+
+                AccessTokenBlock(
+                    title = "Administrador — control total",
+                    description = "Puede cambiar de canal, marcar favoritos y manejar el reproductor.",
+                    token = settings.webServerToken.orEmpty(),
+                    port = settings.webServerPort,
+                    lanIps = lanIps,
+                    clipboard = clipboard,
+                    onRegenerate = {
                         scope.launch { appState.mutateSettings { copy(webServerToken = RemoteAuth.generateToken()) } }
-                    }) { Text("Regenerar") }
+                    },
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                if (settings.webViewerToken.isNullOrBlank()) {
+                    Text(
+                        "Acceso de invitado: solo ve el canal que tú pongas, sin poder cambiar nada.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(onClick = {
+                        scope.launch { appState.mutateSettings { copy(webViewerToken = RemoteAuth.generateToken()) } }
+                    }) { Text("Crear acceso de invitado") }
+                } else {
+                    AccessTokenBlock(
+                        title = "Invitado — solo ver",
+                        description = "Solo ve el canal que has puesto tú. No puede cambiar de canal " +
+                            "ni tocar el reproductor; tampoco recibe la lista de canales.",
+                        token = settings.webViewerToken.orEmpty(),
+                        port = settings.webServerPort,
+                        lanIps = lanIps,
+                        clipboard = clipboard,
+                        onRegenerate = {
+                            scope.launch { appState.mutateSettings { copy(webViewerToken = RemoteAuth.generateToken()) } }
+                        },
+                        onRevoke = {
+                            scope.launch { appState.mutateSettings { copy(webViewerToken = null) } }
+                        },
+                    )
                 }
 
                 Text(
-                    "Enlaces con el token ya incluido — ábrelos directamente en el móvil " +
-                        "(por WhatsApp, notas, etc.) y entras sin teclear nada:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                localLanAddresses().forEach { ip ->
-                    val link = "http://$ip:${settings.webServerPort}/?token=${settings.webServerToken}"
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(link, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        TextButton({ clipboard.setText(AnnotatedString(link)) }) { Text("Copiar enlace") }
-                    }
-                }
-                Text(
-                    "Para verlo fuera de casa, lanza ngrok apuntando a este puerto (ngrok http ${settings.webServerPort}) " +
-                        "y añade \"/?token=${settings.webServerToken}\" a la URL que te dé.",
+                    "Para verlo fuera de casa, lanza ngrok apuntando a este puerto " +
+                        "(ngrok http ${settings.webServerPort}) y añade \"/?token=EL_TOKEN\" a la URL que te dé.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -245,6 +279,57 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
             )
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/**
+ * Bloque de un acceso web (administrador o invitado): el token, los enlaces
+ * listos para abrir en el movil y las acciones de regenerar/revocar.
+ */
+@Composable
+private fun AccessTokenBlock(
+    title: String,
+    description: String,
+    token: String,
+    port: Int,
+    lanIps: List<String>,
+    clipboard: androidx.compose.ui.platform.ClipboardManager,
+    onRegenerate: () -> Unit,
+    onRevoke: (() -> Unit)? = null,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(token, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            TextButton({ clipboard.setText(AnnotatedString(token)) }) { Text("Copiar") }
+            TextButton(onRegenerate) { Text("Regenerar") }
+            if (onRevoke != null) TextButton(onRevoke) { Text("Quitar") }
+        }
+
+        Text(
+            "Enlace directo (entra sin teclear nada):",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        lanIps.forEach { ip ->
+            val link = "http://$ip:$port/?token=$token"
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(link, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
+                TextButton({ clipboard.setText(AnnotatedString(link)) }) { Text("Copiar enlace") }
+            }
+        }
     }
 }
 

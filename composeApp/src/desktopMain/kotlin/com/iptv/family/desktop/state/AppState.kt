@@ -5,10 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.iptv.family.shared.data.repository.LibraryRepository
 import com.iptv.family.shared.data.store.KeyValueStore
+import com.iptv.family.shared.data.xmltv.CommonEpgCache
 import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
+import com.iptv.family.shared.model.EPGProgram
 import com.iptv.family.shared.model.FavoriteChannel
 import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
@@ -44,6 +46,15 @@ class AppState(
     var error by mutableStateOf<String?>(null)
         private set
 
+    /** Guia EPG de la playlist activa (XMLTV), cacheada en shared. */
+    private val epgCache = CommonEpgCache()
+
+    /** Counter para recomponer la UI cuando la guia se (re)carga o pasa el tiempo. */
+    var epgTick by mutableStateOf(0L)
+        private set
+
+    val isEpgLoaded: Boolean get() = epgCache.isLoaded
+
     val selectedPlaylist: Playlist? get() = playlists.find { it.id == selectedPlaylistId }
 
     suspend fun loadAll() {
@@ -65,7 +76,7 @@ class AppState(
     // Alta de playlists
     // ------------------------------------------------------------------
 
-    suspend fun addM3uUrl(name: String, url: String) {
+    suspend fun addM3uUrl(name: String, url: String, epgUrl: String? = null) {
         AppLog.d("AppState", "addM3uUrl: name='$name' url=${AppLog.redactUrl(url)}")
         require(name.isNotBlank()) { "El nombre es obligatorio" }
         val pl = Playlist(
@@ -73,6 +84,7 @@ class AppState(
             name = name,
             type = SourceType.M3U_URL,
             m3uUrl = url,
+            epgUrl = epgUrl?.trim()?.takeIf { it.isNotEmpty() },
             isActive = true,
             lastUpdated = System.currentTimeMillis(),
         )
@@ -81,7 +93,7 @@ class AppState(
         selectPlaylist(pl.id)
     }
 
-    suspend fun addXtream(name: String, url: String, user: String, pass: String) {
+    suspend fun addXtream(name: String, url: String, user: String, pass: String, epgUrl: String? = null) {
         AppLog.d("AppState", "addXtream: name='$name' url=${AppLog.redactUrl(url)} user='$user'")
         require(name.isNotBlank()) { "El nombre es obligatorio" }
         require(url.isNotBlank() && user.isNotBlank()) { "URL y usuario son obligatorios" }
@@ -90,6 +102,7 @@ class AppState(
             name = name,
             type = SourceType.XTREAM,
             xtreamUrl = url,
+            epgUrl = epgUrl?.trim()?.takeIf { it.isNotEmpty() },
             xtreamUser = user,
             xtreamPass = pass,
             isActive = true,
@@ -162,6 +175,44 @@ class AppState(
         }
     }
 
+    // ------------------------------------------------------------------
+    // EPG (guia de programas)
+    // ------------------------------------------------------------------
+
+    /**
+     * URL de la guia XMLTV de la playlist: la que puso el usuario o, en
+     * Xtream sin URL explicita, la estandar del panel (`xmltv.php`), que
+     * comparte host/credenciales con la propia lista.
+     */
+    fun epgUrlFor(playlist: Playlist?): String? {
+        playlist ?: return null
+        playlist.epgUrl?.trim().takeUnless { it.isNullOrEmpty() }?.let { return it }
+        if (playlist.type == SourceType.XTREAM) {
+            val base = playlist.xtreamUrl?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
+            val scheme = if (base.startsWith("https://", true)) "https" else "http"
+            val host = base.removePrefix("https://").removePrefix("http://").trimEnd('/')
+            return "$scheme://$host/xmltv.php?username=${playlist.xtreamUser}&password=${playlist.xtreamPass}"
+        }
+        return null
+    }
+
+    /** Descarga la guia si toca (TTL interno). Si falla, se sigue sin EPG. */
+    suspend fun loadEpg(forceRefresh: Boolean = false) {
+        epgCache.ensureLoaded(epgUrlFor(selectedPlaylist), forceRefresh)
+        epgTick = System.currentTimeMillis()
+    }
+
+    /** Fuerza a recomponer las filas con EPG (refresco periodico de "Ahora"). */
+    fun bumpEpgTick() {
+        epgTick = System.currentTimeMillis()
+    }
+
+    fun currentProgram(channel: Channel?): EPGProgram? =
+        channel?.let { epgCache.currentFor(it.epgChannelId) }
+
+    fun nextProgram(channel: Channel?): EPGProgram? =
+        channel?.let { epgCache.nextFor(it.epgChannelId) }
+
     private suspend fun loadChannels(playlist: Playlist) = withContext(Dispatchers.IO) {
         isLoading = true
         error = null
@@ -201,10 +252,29 @@ class AppState(
             cur.replaceAll { if (it.id == "all") all else it }
         }
         categories = cur
+        // Invalidar la cache de nombres: se reconstruye perezosamente al pedirla.
+        groupNamesById = emptyMap()
     }
 
     fun channelsFor(categoryId: String): List<Channel> =
         if (categoryId == "all") channels else channels.filter { it.group == categoryId }
+
+    /**
+     * Nombre legible del grupo de un canal.
+     *
+     * `Channel.group` es el ID de la categoria: en Xtream es un numero ("142"),
+     * asi que pintarlo tal cual mostraba ese numero donde deberia ir "Deportes".
+     * El mapa se recalcula solo cuando cambian las categorias, no por fila.
+     */
+    private var groupNamesById: Map<String, String> = emptyMap()
+
+    fun groupName(channel: Channel): String? {
+        val gid = channel.group ?: return null
+        if (groupNamesById.isEmpty() && categories.isNotEmpty()) {
+            groupNamesById = categories.associate { it.id to it.name }
+        }
+        return groupNamesById[gid] ?: gid
+    }
 
     fun isFavorite(channelId: String): Boolean =
         favorites.any { it.channelId == channelId && it.playlistId == selectedPlaylistId }

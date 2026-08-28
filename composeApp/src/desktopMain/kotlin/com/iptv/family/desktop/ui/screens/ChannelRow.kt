@@ -1,14 +1,17 @@
 package com.iptv.family.desktop.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -27,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.desktop.ui.ChannelLogo
@@ -45,6 +49,7 @@ fun ChannelRow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val focused by interaction.collectIsFocusedAsState()
     val fav = appState.isFavorite(channel.id)
 
     val background = when {
@@ -57,6 +62,10 @@ fun ChannelRow(
         Modifier
             .fillMaxWidth()
             .background(background, MaterialTheme.shapes.medium)
+            .then(
+                if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium)
+                else Modifier,
+            )
             .hoverable(interaction)
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable { onChannelClick(channel) }
@@ -64,6 +73,21 @@ fun ChannelRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // Numero de dial del proveedor: cifras tabulares y ancho fijo para que la
+        // columna quede alineada entre canales de 1 y de 4 cifras.
+        channel.number?.let { number ->
+            Text(
+                number.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isCurrent) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.width(if (compact) 26.dp else 34.dp),
+            )
+        }
+
         ChannelLogo(channel.logoUrl, channel.name, size = if (compact) 32.dp else 44.dp)
 
         Column(Modifier.weight(1f)) {
@@ -75,10 +99,19 @@ fun ChannelRow(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (!compact) {
+                // epgTick como clave: refresca "Ahora" cuando la guia se recarga o pasa el tiempo.
+                val epgTick = appState.epgTick
+                val program = remember(channel.id, epgTick) { appState.currentProgram(channel) }
                 Text(
-                    channel.group ?: "Sin grupo",
+                    when {
+                        program != null -> "Ahora: ${program.title}"
+                        // groupName y no channel.group: este ultimo es el id de
+                        // categoria y en Xtream se veia un numero suelto.
+                        else -> appState.groupName(channel) ?: "Sin grupo"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (program != null) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
             }

@@ -60,7 +60,10 @@ class M3UParser {
                             logoUrl = extInf.tvgLogo,
                             group = groupName,
                             epgChannelId = extInf.tvgId ?: extInf.tvgName,
-                            categoryType = inferType(groupName)
+                            categoryType = inferType(groupName),
+                            // tvg-chno se parseaba pero se tiraba: es el numero de dial
+                            // que el usuario espera ver y por el que espera ordenar.
+                            number = extInf.tvgChno?.trim()?.toIntOrNull()
                         )
                         channels.add(channel)
                         categoriesMap.getOrPut(groupName) { mutableListOf() }.add(channel.id)

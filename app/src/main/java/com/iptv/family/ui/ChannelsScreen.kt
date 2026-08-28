@@ -201,6 +201,7 @@ fun ChannelsScreen(
                             onToggleFavorite = { scope.launch { appState.toggleFavorite(channel.id) } },
                             onFocusChange = { focused -> if (focused) focusedChannel = channel },
                             requestFocusOnAppear = channel.id == restoreFocusChannelId,
+                            appState = appState,
                         )
                     }
                 }
@@ -294,6 +295,8 @@ fun ChannelRow(
     onToggleFavorite: () -> Unit,
     onFocusChange: (Boolean) -> Unit = {},
     requestFocusOnAppear: Boolean = false,
+    /** Si se pasa, la fila muestra "Ahora" con la guia EPG de la lista activa. */
+    appState: AppState? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(requestFocusOnAppear) {
@@ -325,7 +328,24 @@ fun ChannelRow(
         } else {
             Box(Modifier.size(32.dp).background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small))
         }
-        Text(channel.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Ahora / programa en curso (EPG) de la lista activa, si hay guia.
+        val state = appState
+        val program = if (state != null) {
+            val epgTick = state.epgTick
+            remember(channel.id, epgTick) { state.currentProgram(channel) }
+        } else null
+        Column(Modifier.weight(1f)) {
+            Text(channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (program != null) {
+                Text(
+                    "Ahora: ${program.title}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Icon(
             if (channel.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
             contentDescription = if (channel.isFavorite) "Favorito (mantén pulsado para quitar)" else "Mantén pulsado para marcar favorito",

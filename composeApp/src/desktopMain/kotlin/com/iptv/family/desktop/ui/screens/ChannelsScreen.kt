@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -123,17 +124,38 @@ fun ChannelsScreen(
         return
     }
 
-    val visibleCategories = appState.categories.filter {
-        it.id == "all" || typeFilter.type == null || it.type == typeFilter.type
+    val visibleCategories = remember(appState.categories, typeFilter) {
+        appState.categories.filter {
+            it.id == "all" || typeFilter.type == null || it.type == typeFilter.type
+        }
     }
 
     // Una categoria que ya no encaja con el filtro deja de ser una seleccion valida.
-    if (visibleCategories.none { it.id == selectedCategory }) selectedCategory = "all"
+    // En LaunchedEffect y no en el cuerpo: escribir estado durante la composicion
+    // provoca una recomposicion extra (y se ejecuta en composiciones descartadas).
+    LaunchedEffect(visibleCategories, selectedCategory) {
+        if (visibleCategories.none { it.id == selectedCategory }) selectedCategory = "all"
+    }
 
-    val channels = appState.channelsFor(selectedCategory)
-        .filter { typeFilter.type == null || it.categoryType == typeFilter.type }
-        .filter { search.isBlank() || it.name.contains(search.trim(), ignoreCase = true) }
-        .filterNot { channel -> isAdultGroup(channel.group) && channel.group !in unlocked }
+    // Con 40.000 canales, filtrar en el cuerpo del composable recorria la lista
+    // entera 3-4 veces por recomposicion (por cada tecla del buscador, por cada
+    // cambio de foco...). Con remember solo se recalcula cuando cambia algo que
+    // afecta al resultado, y en una sola pasada en vez de cuatro.
+    val searchTerm = search.trim()
+    val channels = remember(
+        appState.channels,
+        selectedCategory,
+        typeFilter,
+        searchTerm,
+        unlocked,
+        appState.settings.isParentalLockEnabled,
+    ) {
+        appState.channelsFor(selectedCategory).filter { channel ->
+            (typeFilter.type == null || channel.categoryType == typeFilter.type) &&
+                (searchTerm.isBlank() || channel.name.contains(searchTerm, ignoreCase = true)) &&
+                !(isAdultGroup(channel.group) && channel.group !in unlocked)
+        }
+    }
 
     Row(Modifier.fillMaxSize()) {
         CategorySidebar(

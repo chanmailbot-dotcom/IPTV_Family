@@ -112,17 +112,24 @@ class LibraryRepository(private val store: KeyValueStore) {
                         val vod = client.getVodStreams()
                         val series = client.getSeriesStreams()
                         AppLog.d("Library", "XTREAM: live=${live.size} vod=${vod.size} series=${series.size}")
-                        val channels = live + vod + series
+                        val channels = sortByChannelNumber(live + vod + series)
+
+                        // Antes se construia un Category POR CANAL (40.000 objetos) y
+                        // luego se hacia .distinct() para tirar casi todos. Aqui se
+                        // agrupa una sola vez, y cada categoria lleva ya sus canales
+                        // (la UI de escritorio usa ese tamaño para el contador, que
+                        // con la version anterior salia siempre vacio en Xtream).
+                        val byGroup = channels.groupBy { it.group ?: "general" }
                         ChannelsResult.Ok(
                             channels = channels,
-                            categories = channels.map { ch ->
+                            categories = byGroup.map { (groupId, groupChannels) ->
                                 Category(
-                                    id = ch.group ?: "general",
-                                    name = groups[ch.group.orEmpty()] ?: "General",
-                                    type = ch.categoryType,
-                                    channels = emptyList()
+                                    id = groupId,
+                                    name = groups[groupId] ?: "General",
+                                    type = groupChannels.first().categoryType,
+                                    channels = groupChannels.map { it.id },
                                 )
-                            }.distinct()
+                            }
                         )
                     } catch (e: Exception) {
                         AppLog.e("Library", "XTREAM: fallo cargando streams", e)
@@ -222,10 +229,29 @@ class LibraryRepository(private val store: KeyValueStore) {
         }
         val parsed = m3uParser.parse(content)
         return ChannelsResult.Ok(
-            channels = parsed.channels,
+            channels = sortByChannelNumber(parsed.channels),
             categories = parsed.categories
         )
     }
+
+    /**
+     * Orden que el usuario espera ver: por el numero de dial que publica el
+     * proveedor (`num` en Xtream, `tvg-chno` en M3U) y, para los que no lo
+     * traen, alfabetico al final. Sin esto la lista sale en el orden crudo de
+     * la respuesta del panel, que no sigue ningun criterio.
+     *
+     * Primero por tipo: en Xtream la numeracion se reinicia en cada seccion
+     * (hay un canal 1 de TV, una pelicula 1 y una serie 1), asi que ordenar
+     * solo por numero intercalaria las tres cosas en la misma lista.
+     */
+    private fun sortByChannelNumber(channels: List<Channel>): List<Channel> =
+        channels.sortedWith(
+            compareBy(
+                { it.categoryType.ordinal },
+                { it.number ?: Int.MAX_VALUE },
+                { it.name.lowercase() },
+            )
+        )
 
     /**
      * HttpURLConnection sigue redirecciones automaticamente solo si el protocolo no

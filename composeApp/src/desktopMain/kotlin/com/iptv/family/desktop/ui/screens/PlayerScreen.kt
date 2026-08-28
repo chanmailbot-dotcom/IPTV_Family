@@ -36,6 +36,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
@@ -79,11 +80,32 @@ fun PlayerScreen(
             delay(SURFACE_POLL_MS)
             waited += SURFACE_POLL_MS
         }
+        // Si el servidor web esta activo, VLC consume el canal a traves del
+        // multiplexor local (`/stream/current.m3u8`): hacia el proveedor hay
+        // UNA sola conexion aunque VLC y los navegadores remotos lo vean a la
+        // vez (paneles limitados a "1 conexion por cuenta" patean la 2a sesion).
+        // url (origen) sigue siendo la identidad del canal para zapeo/EPG/web;
+        // el proxy la lee de controller.currentUrl.
+        fun muxUrl(): String? {
+            val s = appState.settings
+            val token = s.webServerToken
+            if (!s.enableWebServer || token.isNullOrBlank()) return null
+            return "http://127.0.0.1:${s.webServerPort}/stream/current.m3u8?token=$token"
+        }
         controller.play(
             url = channel.url,
             networkCachingMs = bufferMs,
             hardwareDecoding = hardwareDecoding,
+            playbackUrl = muxUrl(),
         )
+    }
+
+    // La linea "Ahora / Luego" del EPG debe refrescarse cuando cambian los programas.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            appState.bumpEpgTick()
+        }
     }
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
@@ -132,6 +154,7 @@ fun PlayerScreen(
         ControlBar(
             controller = controller,
             channel = channel,
+            appState = appState,
             isFullscreen = isFullscreen,
             onToggleFullscreen = onToggleFullscreen,
             onBack = onBack,
@@ -203,6 +226,7 @@ private fun ZapList(
 private fun ControlBar(
     controller: VlcController,
     channel: Channel,
+    appState: AppState,
     isFullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
     onBack: () -> Unit,
@@ -260,13 +284,30 @@ private fun ControlBar(
                 when {
                     controller.error != null -> "Error"
                     controller.isBuffering -> "Cargando…"
-                    controller.isPlaying -> "En directo · ${channel.group ?: "Sin grupo"}"
+                    controller.isPlaying -> "En directo · ${appState.groupName(channel) ?: "Sin grupo"}"
                     else -> "En pausa"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
+            // Guia: "Ahora" y, si hay, "Luego". Oculto en pantalla completa.
+            if (!isFullscreen) {
+                val epgTick = appState.epgTick
+                val now = remember(channel.id, epgTick) { appState.currentProgram(channel) }
+                val next = remember(channel.id, epgTick) { appState.nextProgram(channel) }
+                now?.let { program ->
+                    Text(
+                        buildString {
+                            append("Ahora: ${program.title}")
+                            next?.let { append(" · Luego: ${it.title}") }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
 
         IconButton({ controller.changeMuted(!controller.isMuted) }) {

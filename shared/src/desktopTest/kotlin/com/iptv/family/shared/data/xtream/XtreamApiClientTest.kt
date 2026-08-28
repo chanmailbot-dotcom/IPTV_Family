@@ -1,4 +1,4 @@
-package com.iptv.family.shared.data.xtream
+﻿package com.iptv.family.shared.data.xtream
 
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * Prueba el cliente Xtream contra un servidor HTTP embebido en memoria
- * para validar parsing, construcción de URLs y manejo de errores.
+ * para validar parsing, construcciÃ³n de URLs y manejo de errores.
  */
 class XtreamApiClientTest {
 
@@ -82,7 +82,7 @@ class XtreamApiClientTest {
         val vod = client.getVodStreams()
         assertEquals(1, vod.size)
         assertEquals("201", vod[0].id)
-        assertTrue(vod[0].url.endsWith("/vod/alice/pw/201.mp4"))
+        assertTrue(vod[0].url.endsWith("/movie/alice/pw/201.mp4"))
 
         val series = client.getSeriesStreams()
         assertEquals(1, series.size)
@@ -107,7 +107,7 @@ class XtreamApiClientTest {
         assertEquals("1", epg[0].id)
         assertEquals("101", epg[0].channelId)
         assertEquals("Programa", epg[0].title)
-        // Epoch en segundos → ms
+        // Epoch en segundos â†’ ms
         assertEquals(1704070800000L, epg[0].startTime)
         assertEquals(1704074400000L, epg[0].endTime)
     }

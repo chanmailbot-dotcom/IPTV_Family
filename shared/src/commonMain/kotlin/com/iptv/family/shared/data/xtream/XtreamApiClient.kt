@@ -212,8 +212,16 @@ class XtreamApiClient(
                     url = getStreamUrl(type, streamId, containerExtension),
                     logoUrl = stream.stringOrNull("stream_icon") ?: stream.stringOrNull("cover"),
                     group = categoryId.ifBlank { null },
-                    epgChannelId = if (type == "live") streamId else null,
-                    categoryType = type.toCategoryType()
+                    // El id de guia real del panel (ej. "la1.es"); muchos paneles
+                    // lo traen vacio, entonces el stream_id es el mejor candidato.
+                    epgChannelId = if (type == "live") {
+                        stream.stringOrNull("epg_channel_id")?.takeIf { it.isNotBlank() } ?: streamId
+                    } else null,
+                    categoryType = type.toCategoryType(),
+                    // `num` es el orden de dial que publica el panel; sin esto la
+                    // lista sale en el orden crudo del JSON, que no es el que el
+                    // usuario espera ver.
+                    number = stream.longOrNull("num")?.toInt()
                 )
             }
         } catch (e: Exception) {

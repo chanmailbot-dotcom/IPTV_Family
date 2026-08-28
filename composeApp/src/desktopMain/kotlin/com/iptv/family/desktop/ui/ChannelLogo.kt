@@ -23,25 +23,34 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.iptv.family.shared.log.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import javax.imageio.ImageIO
 
 /**
- * Cache de logos de canal. Las listas IPTV traen miles de entradas, asi que la
- * cache esta acotada y los fallos se recuerdan para no reintentar en cada scroll.
- *
- * ponytail: LRU con lock global y tope de 400 entradas. Si algun dia hace falta
- * mas, cache en disco bajo ~/.iptv-family/logos.
+ * Cache de logos de canal en dos niveles: memoria (LRU de 400 entradas) y
+ * disco (`~/.iptv-family/logos`). Las listas IPTV traen miles de logos, asi
+ * que con la capa de disco solo se descargan una vez aunque la app se
+ * reinicie; los fallos se recuerdan en memoria para no reintentar en cada
+ * scroll, y la cache de disco se recorta por tamano para no crecer sin fin.
  */
 private object LogoCache {
     private const val MAX = 400
+    private const val DISK_MAX_BYTES = 256L * 1024 * 1024
     private val lock = Any()
     private val cache = object : LinkedHashMap<String, ImageBitmap?>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap?>) = size > MAX
     }
+    private val diskDir: File by lazy {
+        File(File(System.getProperty("user.home"), ".iptv-family"), "logos").apply { mkdirs() }
+    }
+    private var diskWrites = 0
 
     fun cached(url: String): Result? = synchronized(lock) {
         if (cache.containsKey(url)) Result(cache[url]) else null
@@ -54,19 +63,80 @@ private object LogoCache {
         return bitmap
     }
 
-    private fun fetch(url: String): ImageBitmap? = try {
+    /** Memoria -> disco -> red. Solo se persiste lo que se puede decodificar. */
+    private fun fetch(url: String): ImageBitmap? {
+        diskFileFor(url)?.takeIf { it.isFile }?.let { file ->
+            val fromDisk = decode(file)
+            if (fromDisk != null) return fromDisk
+            file.delete() // corrupto o ilegible: se vuelve a descargar
+        }
+        val bytes = download(url) ?: return null
+        val bitmap = decodeBytes(bytes) ?: return null
+        writeToDisk(url, bytes)
+        return bitmap
+    }
+
+    private fun download(url: String): ByteArray? = try {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
             readTimeout = 8_000
             setRequestProperty("User-Agent", "IPTV-Family/1.0")
         }
         try {
-            connection.inputStream.use { ImageIO.read(it) }?.toComposeImageBitmap()
+            connection.inputStream.use { it.readBytes() }
         } finally {
             connection.disconnect()
         }
     } catch (e: Exception) {
         null
+    }
+
+    private fun decode(file: File): ImageBitmap? = try {
+        ImageIO.read(file)?.toComposeImageBitmap()
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun decodeBytes(bytes: ByteArray): ImageBitmap? = try {
+        ImageIO.read(ByteArrayInputStream(bytes))?.toComposeImageBitmap()
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Nombre estable por URL: SHA-256 + extension si la URL la aporta. */
+    private fun diskFileFor(url: String): File? = try {
+        val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
+        val hash = digest.joinToString("") { "%02x".format(it) }
+        val ext = Regex("\\.(png|jpe?g|gif|bmp)($|[?#])", RegexOption.IGNORE_CASE)
+            .find(url)?.groupValues?.get(1)?.lowercase()?.let { ".$it" } ?: ".img"
+        File(diskDir, "$hash$ext")
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Escritura atomica: fichero temporal + renombrado. */
+    private fun writeToDisk(url: String, bytes: ByteArray) {
+        val target = diskFileFor(url) ?: return
+        runCatching {
+            val tmp = File(diskDir, "${target.name}.tmp")
+            tmp.writeBytes(bytes)
+            if (target.exists()) target.delete()
+            if (!tmp.renameTo(target)) tmp.delete()
+            if (++diskWrites % 400 == 0) trimDisk()
+        }
+    }
+
+    /** Si la cache de disco supera el tope, elimina los ficheros mas viejos. */
+    private fun trimDisk() {
+        val files = diskDir.listFiles() ?: return
+        var total = files.sumOf { it.length() }
+        if (total <= DISK_MAX_BYTES) return
+        for (file in files.sortedBy { it.lastModified() }) {
+            if (total <= DISK_MAX_BYTES / 2) break
+            val size = file.length()
+            if (file.delete()) total -= size
+        }
+        AppLog.d("Logos", "trimDisk: cache reducida a ~${total / 1024} KB")
     }
 
     /** Envoltorio para distinguir "no cacheado" de "cacheado como fallo". */

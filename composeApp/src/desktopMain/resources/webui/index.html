@@ -1,43 +1,182 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="auto">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>IPTV Family — control remoto</title>
-<link rel="stylesheet" href="/style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0e14">
+  <meta name="description" content="Control remoto y visionado en directo de IPTV Family">
+  <title>IPTV Family · Control remoto</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div id="login-screen" class="screen">
-    <div class="login-box">
-      <h1>IPTV Family</h1>
-      <p>Introduce el token de acceso (lo encuentras en Ajustes → Servidor web, en el PC).</p>
-      <input id="token-input" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Token" autocomplete="off" />
-      <button id="login-btn">Entrar</button>
-      <p id="login-error" class="error"></p>
-    </div>
-  </div>
 
-  <div id="app-screen" class="screen hidden">
-    <header>
-      <h1 id="playlist-name">IPTV Family</h1>
-      <input id="search" type="search" placeholder="Buscar canal…" />
+  <!-- ══════════════ LOGIN ══════════════ -->
+  <section id="login-view" class="login-view" hidden>
+    <div class="login-card">
+      <div class="login-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><rect x="4" y="8" width="40" height="28" rx="6" fill="url(#lg)"/><path d="M20 17l10 5-10 5z" fill="#fff"/><path d="M18 42h12M24 36v6" stroke="url(#lg)" stroke-width="3.5" stroke-linecap="round"/><defs><linearGradient id="lg" x1="4" y1="8" x2="44" y2="36"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs></svg>
+        </span>
+        <h1>IPTV Family</h1>
+        <p>Control remoto y visión en directo</p>
+      </div>
+      <form id="login-form" novalidate>
+        <label class="field" for="token-input">
+          <span class="field-label">Token de acceso</span>
+          <span class="field-box">
+            <input id="token-input" type="password" autocomplete="current-password"
+                   placeholder="Pega el token de Ajustes → Servidor web" spellcheck="false">
+            <button type="button" id="toggle-token" class="eye-btn" aria-label="Mostrar token" title="Mostrar / ocultar">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </span>
+        </label>
+        <p id="login-error" class="login-error" role="alert" hidden></p>
+        <button type="submit" id="login-submit" class="btn btn-primary btn-block">Entrar</button>
+      </form>
+      <p class="login-hint">El token se genera en la app de escritorio, en <strong>Ajustes → Servidor web</strong>.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════ APP ══════════════ -->
+  <div id="app-view" class="app" hidden>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><rect x="4" y="8" width="40" height="28" rx="6" fill="url(#lg2)"/><path d="M20 17l10 5-10 5z" fill="#fff"/><path d="M18 42h12M24 36v6" stroke="url(#lg2)" stroke-width="3.5" stroke-linecap="round"/><defs><linearGradient id="lg2" x1="4" y1="8" x2="44" y2="36"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs></svg>
+        </span>
+        <div class="brand-text">
+          <strong>IPTV Family</strong>
+          <span id="playlist-name" class="brand-sub">—</span>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+        <input id="search-input" type="search" placeholder="Buscar canales…  ( / )" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="top-actions">
+        <button id="fav-filter" class="icon-btn" aria-pressed="false" title="Solo favoritos" aria-label="Solo favoritos">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.7-10-9.3C.6 8.6 2.7 5 6.2 5c2.2 0 3.9 1.2 5.8 3.4C13.9 6.2 15.6 5 17.8 5c3.5 0 5.6 3.6 4.2 6.7C19.5 16.3 12 21 12 21z"/></svg>
+        </button>
+        <div class="theme-switch" role="radiogroup" aria-label="Tema de color">
+          <button type="button" class="theme-opt" data-theme-opt="auto" role="radio" aria-checked="true" title="Tema del sistema">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/></svg>
+          </button>
+          <button type="button" class="theme-opt" data-theme-opt="light" role="radio" aria-checked="false" title="Claro">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>
+          </button>
+          <button type="button" class="theme-opt" data-theme-opt="dark" role="radio" aria-checked="false" title="Oscuro">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></svg>
+          </button>
+        </div>
+        <span id="role-badge" class="role-badge" hidden></span>
+        <div id="connection" class="connection is-offline" role="status">
+          <span class="dot" aria-hidden="true"></span><span id="connection-label">Conectando…</span>
+        </div>
+      </div>
     </header>
-    <main>
-      <section id="player-section">
-        <video id="player" controls playsinline></video>
-        <div id="now-playing">
-          <span id="now-playing-name">Sin reproducir</span>
-          <span id="now-playing-status"></span>
+
+    <main class="layout">
+      <!-- ─── Escenario ─── -->
+      <section class="stage-col" aria-label="Reproductor">
+        <div class="video-card" id="video-card">
+          <div class="video-frame">
+            <video id="video" playsinline></video>
+
+            <div class="video-top">
+              <span id="live-badge" class="live-badge" hidden><span class="live-dot"></span>En vivo</span>
+              <div class="np-meta" id="np-meta" hidden>
+                <img id="np-logo" alt="" referrerpolicy="no-referrer">
+                <div class="np-text">
+                  <strong id="np-name"></strong>
+                  <span id="np-group"></span>
+                  <span id="np-epg" class="np-epg"></span>
+                </div>
+              </div>
+            </div>
+
+            <div id="overlay-idle" class="overlay" hidden>
+              <svg class="ic overlay-ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="M10 9.5l5 2-5 2z"/></svg>
+              <p>Elige un canal para empezar</p>
+            </div>
+
+            <div id="overlay-buffer" class="overlay" hidden>
+              <div class="spinner" role="status" aria-label="Cargando"></div>
+              <p>Sintonizando…</p>
+            </div>
+
+            <div id="overlay-error" class="overlay" hidden>
+              <svg class="ic overlay-ic danger" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+              <p id="error-msg">No se pudo cargar el stream</p>
+              <button id="btn-retry" class="btn btn-primary">Reintentar</button>
+            </div>
+
+            <button id="big-play" class="big-play" hidden aria-label="Reproducir" title="Reproducir">
+              <svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>
+            </button>
+
+            <!-- Sin sonido: por autoplay bloqueado (se activa al tocar) o porque
+                 el canal emite AC-3/MP2, que el navegador no puede decodificar. -->
+            <p id="audio-notice" class="audio-notice" role="status" hidden></p>
+          </div>
+
+          <div class="controls">
+            <div class="ctrl-group">
+              <button id="btn-prev" class="ctrl-btn" title="Canal anterior (P)" aria-label="Canal anterior">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M18 5v14L8 12z"/><path d="M6 5v14"/></svg>
+              </button>
+              <button id="btn-playpause" class="ctrl-btn primary" title="Reproducir / Pausar (Espacio)" aria-label="Reproducir o pausar">
+                <svg class="ic ic-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>
+                <svg class="ic ic-pause" viewBox="0 0 24 24" hidden><path d="M8 5v14M16 5v14"/></svg>
+              </button>
+              <button id="btn-stop" class="ctrl-btn" title="Detener" aria-label="Detener">
+                <svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg>
+              </button>
+              <button id="btn-next" class="ctrl-btn" title="Canal siguiente (N)" aria-label="Canal siguiente">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M6 5v14l10-7z"/><path d="M18 5v14"/></svg>
+              </button>
+            </div>
+
+            <div class="ctrl-group volume-group">
+              <button id="btn-mute" class="ctrl-btn" title="Silenciar (M)" aria-label="Silenciar" aria-pressed="false">
+                <svg class="ic ic-vol-on" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+                <svg class="ic ic-vol-off" viewBox="0 0 24 24" hidden><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+              </button>
+              <input id="volume" class="volume-slider" type="range" min="0" max="100" step="1" value="80" aria-label="Volumen">
+            </div>
+
+            <button id="btn-fs" class="ctrl-btn" title="Pantalla completa (F)" aria-label="Pantalla completa">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            </button>
+          </div>
         </div>
       </section>
-      <section id="list-section">
-        <div id="categories"></div>
-        <ul id="channels"></ul>
-      </section>
+
+      <!-- ─── Canales ─── -->
+      <aside class="channels-col" aria-label="Lista de canales">
+        <div class="channels-head">
+          <h2>Canales</h2>
+          <span id="channels-count" class="count">0</span>
+        </div>
+        <div id="group-chips" class="chips" role="tablist" aria-label="Grupos"></div>
+        <div id="channel-list" class="channel-list" role="list"></div>
+        <div id="list-sentinel" class="list-sentinel" hidden aria-hidden="true"><span class="spinner small"></span></div>
+        <div id="empty-state" class="empty-state" hidden>
+          <svg class="ic overlay-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+          <p>Sin resultados</p>
+          <span>Prueba con otra búsqueda o grupo</span>
+        </div>
+      </aside>
     </main>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
-  <script src="/app.js"></script>
+  <script src="/hls.min.js"></script>
+  <script src="/app.js" defer></script>
 </body>
 </html>
