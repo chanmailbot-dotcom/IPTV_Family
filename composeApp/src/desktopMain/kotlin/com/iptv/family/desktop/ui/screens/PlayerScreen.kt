@@ -361,7 +361,6 @@ private fun AudioTrackSelector(controller: VlcController) {
     if (tracks.size < 2) return
 
     var expanded by remember { mutableStateOf(false) }
-    val current = tracks.firstOrNull { it.id == controller.currentAudioTrackId }
 
     Box {
         TextButton(onClick = { expanded = true }) {
@@ -371,7 +370,7 @@ private fun AudioTrackSelector(controller: VlcController) {
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(6.dp))
-            Text(current?.label ?: "Audio", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            Text("Audio", style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             tracks.forEach { track ->

@@ -68,7 +68,26 @@ private enum class Destination(val label: String, val icon: ImageVector) {
     SETTINGS(AppStrings.Nav.SETTINGS, Icons.Rounded.Settings),
 }
 
-fun main() = application {
+fun main() {
+    // El video de libvlc va en un SwingPanel, que es un componente AWT "pesado":
+    // una ventana nativa hija que se pinta por encima de todo lo que dibuje
+    // Compose en el mismo lienzo. Por eso el desplegable de audio se abria
+    // "detras" de la imagen.
+    //
+    // Con layers.type=WINDOW los popups de Compose (menus, tooltips, dialogos)
+    // pasan a ser ventanas reales del sistema en vez de capas dentro del lienzo,
+    // y una ventana propia SI queda por encima del video. Es el mismo truco que
+    // usa Swing con sus menus "heavyweight".
+    //
+    // Hay que fijarlo antes de crear la ventana. Se puede sobreescribir desde
+    // fuera con -Dcompose.layers.type=... para comparar comportamientos.
+    if (System.getProperty("compose.layers.type") == null) {
+        System.setProperty("compose.layers.type", "WINDOW")
+    }
+    mainWindow()
+}
+
+private fun mainWindow() = application {
     val windowState = rememberWindowState(width = 1360.dp, height = 820.dp)
 
     val appState = remember {

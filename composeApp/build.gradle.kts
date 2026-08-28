@@ -55,6 +55,13 @@ compose.desktop {
     application {
         mainClass = "com.iptv.family.desktop.MainKt"
 
+        // Para depurar en desarrollo sin recompilar:
+        //   ./gradlew :composeApp:run -PappJvmArgs="-Dcompose.interop.blending=false"
+        (project.findProperty("appJvmArgs") as? String)
+            ?.split(' ')
+            ?.filter { it.isNotBlank() }
+            ?.let { jvmArgs += it }
+
         // El runtime de VLC se copia aqui antes de empaquetar (ver scripts/fetch-vlc.*)
         // y queda accesible en tiempo de ejecucion vía compose.application.resources.dir.
         nativeDistributions {
