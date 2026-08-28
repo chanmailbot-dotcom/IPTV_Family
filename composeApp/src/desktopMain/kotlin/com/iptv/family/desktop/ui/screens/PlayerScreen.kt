@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.player.VlcController
 import com.iptv.family.desktop.player.VlcNative
+import com.iptv.family.desktop.remote.LocalMuxKey
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.CoroutineScope
@@ -88,9 +89,13 @@ fun PlayerScreen(
         // el proxy la lee de controller.currentUrl.
         fun muxUrl(): String? {
             val s = appState.settings
-            val token = s.webServerToken
-            if (!s.enableWebServer || token.isNullOrBlank()) return null
-            return "http://127.0.0.1:${s.webServerPort}/stream/current.m3u8?token=$token"
+            if (!s.enableWebServer) return null
+            // Clave interna, no una cuenta de usuario: el escritorio es el servidor
+            // y no tiene por que identificarse contra si mismo (ver LocalMuxKey).
+            // `nt=1` para que el mux le sirva el stream original y no la version
+            // con el audio reconvertido, que es solo para navegadores.
+            return "http://127.0.0.1:${s.webServerPort}/stream/current.m3u8" +
+                "?nt=1&${LocalMuxKey.PARAM}=${LocalMuxKey.value}"
         }
         controller.play(
             url = channel.url,

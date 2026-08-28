@@ -38,16 +38,20 @@ const state = {
 
 const isAdmin = () => state.role === "admin";
 
-function authHeaders() {
-  return { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" };
-}
+/**
+ * La sesion va en una cookie HttpOnly que planta /login, asi que las peticiones
+ * normales no necesitan cabecera: basta `credentials: "include"`. El token solo
+ * se usa aparte para SSE y el <video>, que no pueden mandar cabeceras ni,
+ * segun el navegador, cookies en peticiones de subrecursos.
+ */
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
-    headers: { ...authHeaders(), ...(opts.headers || {}) },
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     credentials: "include",
   });
-  if (res.status === 401) { showLogin("La sesión no es válida. Vuelve a introducir el token."); throw new Error("unauthorized"); }
+  if (res.status === 401) { showLogin("La sesión ha caducado. Vuelve a entrar."); throw new Error("unauthorized"); }
+  if (res.status === 403) { throw new Error("forbidden"); }
   return res;
 }
 async function apiPost(path, body) {
@@ -61,36 +65,86 @@ function showLogin(message) {
   stopEverything();
   $("app-view").hidden = true;
   $("login-view").hidden = false;
-  if (message) {
-    const err = $("login-error");
-    err.textContent = message; err.hidden = false;
-  }
-  setTimeout(() => $("token-input").focus(), 50);
+  const err = $("login-error");
+  if (message) { err.textContent = message; err.hidden = false; }
+  else { err.hidden = true; }
+  setTimeout(() => $("user-input").focus(), 50);
 }
 
-async function tryStart(token, { persist = true } = {}) {
-  state.token = token;
-  const res = await fetch("/api/state", { headers: authHeaders(), credentials: "include" });
-  if (res.status === 401) {
-    // Un token guardado que ya no vale no debe volver a intentarse en silencio.
-    if (persist) localStorage.removeItem("iptv_token");
-    showLogin("Token incorrecto. Revísalo e inténtalo de nuevo.");
-    return false;
-  }
-  if (!res.ok) { showLogin("No se pudo conectar con la app de escritorio."); return false; }
-  if (persist) localStorage.setItem("iptv_token", token);
+/**
+ * Primer arranque: no hay ninguna cuenta todavia, asi que el formulario crea la
+ * de administrador en vez de iniciar sesion. Evita el huevo y la gallina de
+ * tener que ir al PC a crear la primera cuenta para poder entrar.
+ */
+function setSetupMode(on) {
+  state.setupMode = on;
+  $("login-submit").textContent = on ? "Crear cuenta de administrador" : "Entrar";
+  $("login-hint").innerHTML = on
+    ? "Es la primera vez: crea la cuenta de <strong>administrador</strong>. Podrás añadir más cuentas después."
+    : "Las cuentas se crean en la app de escritorio, en <strong>Ajustes → Servidor web</strong>, o desde el botón de usuarios.";
+  $("pass-input").setAttribute("autocomplete", on ? "new-password" : "current-password");
+}
+
+/** Intenta entrar con la sesion que ya tenga el navegador (cookie). */
+async function tryResumeSession() {
+  const res = await fetch("/api/state", { credentials: "include" });
+  if (!res.ok) return false;
   const data = await res.json();
   enterApp(data);
   return true;
 }
 
+async function doLogin(username, password) {
+  const res = await fetch("/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    showLogin("Usuario o contraseña incorrectos.");
+    return false;
+  }
+  const info = await res.json();
+  // Clave para SSE y <video>, que no pueden mandar cabeceras propias.
+  state.token = info.streamKey || null;
+  return tryResumeSession();
+}
+
+/** Crea la primera cuenta de administrador (solo posible si no hay ninguna). */
+async function doSetup(username, password) {
+  const res = await fetch("/api/setup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showLogin(setupErrorText(err.error));
+    return false;
+  }
+  return doLogin(username, password);
+}
+
+function setupErrorText(code) {
+  switch (code) {
+    case "username_too_short": return "El usuario debe tener al menos 3 caracteres.";
+    case "weak_password": return "La contraseña debe tener al menos 6 caracteres.";
+    case "username_required": return "Escribe un nombre de usuario.";
+    case "password_required": return "Escribe una contraseña.";
+    case "already_configured": return "Ya hay cuentas creadas: inicia sesión.";
+    case "username_taken": return "Ya existe una cuenta con ese nombre.";
+    default: return "No se pudo crear la cuenta.";
+  }
+}
+
 function enterApp(data) {
+  // Los controles se cablean una sola vez al arrancar (ver boot), no aqui: si se
+  // hiciera en cada entrada, cerrar y volver a abrir sesion duplicaria los
+  // listeners y cada clic contaria dos veces.
   $("login-view").hidden = true;
   $("app-view").hidden = false;
-  if (!state.started) {
-    state.started = true;
-    wireControls();
-  }
   connectEvents(); // reconecta siempre (showLogin cierra el SSE anterior)
   applyState(data);
 }
@@ -98,6 +152,7 @@ function enterApp(data) {
 /* ─── Estado / SSE ─── */
 function applyState(data) {
   state.role = data.role === "admin" ? "admin" : "viewer";
+  state.username = data.username || null;
   state.channels = Array.isArray(data.channels) ? data.channels : [];
   state.groupNames = new Map((data.groups || []).map((g) => [g.id, g.name]));
   state.favIds = new Set(data.favoriteChannelIds || []);
@@ -122,10 +177,14 @@ function applyRole() {
     const el = $(id);
     if (el) { el.hidden = !admin; el.disabled = !admin; }
   });
+  // Solo el administrador gestiona cuentas.
+  $("btn-users").hidden = !admin;
+
   const badge = $("role-badge");
   if (badge) {
-    badge.hidden = admin;
-    badge.textContent = "Solo lectura";
+    const who = state.username ? `${state.username} · ` : "";
+    badge.hidden = false;
+    badge.textContent = admin ? `${who}administrador` : `${who}solo lectura`;
   }
 }
 
@@ -135,7 +194,9 @@ function handleChannelsChanged() {
 
 function connectEvents() {
   try { state.sse?.close(); } catch {}
-  const es = new EventSource("/api/events?token=" + encodeURIComponent(state.token));
+  const es = new EventSource(
+    state.token ? "/api/events?s=" + encodeURIComponent(state.token) : "/api/events"
+  );
   state.sse = es;
   es.onopen = () => setOnline(true);
   es.addEventListener("now-playing", (e) => {
@@ -277,8 +338,8 @@ let volumeDrag = false;
  */
 function streamUrl() {
   const ch = state.now.channelId || "none";
-  return "/stream/current.m3u8?ch=" + encodeURIComponent(ch)
-    + "&token=" + encodeURIComponent(state.token);
+  const key = state.token ? "&s=" + encodeURIComponent(state.token) : "";
+  return "/stream/current.m3u8?ch=" + encodeURIComponent(ch) + key;
 }
 
 function destroyHls() {
@@ -558,6 +619,61 @@ async function toggleFav(id, btn) {
   }
 }
 
+/* ─── Gestión de usuarios (solo administrador) ─── */
+async function renderUsers() {
+  const list = $("users-list");
+  let users = [];
+  try {
+    const res = await api("/api/users");
+    users = await res.json();
+  } catch {
+    list.innerHTML = "<p class='users-msg'>No se pudo cargar la lista de usuarios.</p>";
+    return;
+  }
+  const admins = users.filter((u) => u.role === "admin").length;
+  list.innerHTML = users.map((u) => {
+    // El último administrador no se puede borrar: nadie podría volver a
+    // gestionar cuentas sin editar el fichero de ajustes en el PC.
+    const isLastAdmin = u.role === "admin" && admins <= 1;
+    return `<div class="user-row">`
+      + `<span class="user-info"><strong>${escapeHtml(u.username)}</strong>`
+      + `<small>${u.role === "admin" ? "Administrador · control total" : "Invitado · solo ver"}</small></span>`
+      + `<button type="button" class="btn btn-sm" data-pass="${escapeHtml(u.username)}">Contraseña</button>`
+      + `<button type="button" class="btn btn-sm btn-danger" data-del="${escapeHtml(u.username)}"`
+      + `${isLastAdmin ? " disabled title='Es el único administrador'" : ""}>Borrar</button>`
+      + `</div>`;
+  }).join("") || "<p class='users-msg'>No hay cuentas.</p>";
+
+  list.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.del;
+      if (!confirm(`¿Borrar la cuenta «${name}»?`)) return;
+      const res = await fetch(`/api/users/${encodeURIComponent(name)}/delete`,
+        { method: "POST", credentials: "include" });
+      $("users-msg").textContent = res.ok
+        ? `Cuenta «${name}» eliminada.`
+        : "No se pudo borrar (¿es el único administrador?).";
+      await renderUsers();
+    });
+  });
+  list.querySelectorAll("[data-pass]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.pass;
+      const password = prompt(`Contraseña nueva para «${name}» (mín. 6 caracteres):`);
+      if (!password) return;
+      const res = await fetch(`/api/users/${encodeURIComponent(name)}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+        credentials: "include",
+      });
+      $("users-msg").textContent = res.ok
+        ? `Contraseña de «${name}» cambiada (se ha cerrado su sesión).`
+        : "La contraseña debe tener al menos 6 caracteres.";
+    });
+  });
+}
+
 /* ─── Volumen: relleno del slider ─── */
 function updateVolumeFill() {
   const v = Number($("volume").value) || 0;
@@ -580,21 +696,61 @@ function stopEverything() {
 }
 /* ═══════════ Cableado de controles (una sola vez) ═══════════ */
 function wireControls() {
-  /* Login */
+  /* Login (o creación de la primera cuenta) */
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const token = $("token-input").value.trim();
-    if (!token) { showLogin("Introduce el token de acceso."); return; }
+    const username = $("user-input").value.trim();
+    const password = $("pass-input").value;
+    if (!username || !password) { showLogin("Rellena usuario y contraseña."); return; }
     $("login-submit").disabled = true;
-    try { await tryStart(token); }
-    finally { $("login-submit").disabled = false; }
+    try {
+      if (state.setupMode) await doSetup(username, password);
+      else await doLogin(username, password);
+    } finally {
+      $("login-submit").disabled = false;
+      $("pass-input").value = "";
+    }
   });
-  $("toggle-token").addEventListener("click", () => {
-    const inp = $("token-input");
+  $("toggle-pass").addEventListener("click", () => {
+    const inp = $("pass-input");
     const show = inp.type === "password";
     inp.type = show ? "text" : "password";
-    $("toggle-token").setAttribute("aria-label", show ? "Ocultar token" : "Mostrar token");
+    $("toggle-pass").setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
     inp.focus();
+  });
+
+  /* Cerrar sesión */
+  $("btn-logout").addEventListener("click", async () => {
+    try { await fetch("/logout", { method: "POST", credentials: "include" }); } catch {}
+    state.token = null;
+    showLogin("Sesión cerrada.");
+  });
+
+  /* Gestión de usuarios (solo administrador) */
+  $("btn-users").addEventListener("click", async () => {
+    await renderUsers();
+    $("users-dialog").showModal();
+  });
+  $("users-close").addEventListener("click", () => $("users-dialog").close());
+  $("new-user-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = $("nu-name").value.trim();
+    const password = $("nu-pass").value;
+    const role = $("nu-admin").checked ? "admin" : "viewer";
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, role }),
+      credentials: "include",
+    });
+    if (res.ok) {
+      $("nu-name").value = ""; $("nu-pass").value = ""; $("nu-admin").checked = false;
+      $("users-msg").textContent = `Cuenta «${username}» creada.`;
+      await renderUsers();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      $("users-msg").textContent = setupErrorText(err.error);
+    }
   });
 
   /* Tema */
@@ -740,26 +896,28 @@ function wireControls() {
 }
 
 /* ═══════════ Arranque ═══════════ */
-(function boot() {
+(async function boot() {
   setTheme(localStorage.getItem("web_theme") || "auto");
-  // Auto-login por enlace compartido (?token=...): si entra por URL, prueba
-  // el token, lo guarda y limpia la direccion para no dejarlo a la vista.
-  const fromUrl = new URLSearchParams(location.search).get("token");
-  if (fromUrl) {
-    tryStart(fromUrl).then((ok) => {
-      if (ok) {
-        localStorage.setItem("iptv_token", fromUrl);
-        history.replaceState(null, "", location.pathname);
-      } else {
-        showLogin();
-      }
-    });
+  // Restos del sistema anterior de token en localStorage: ya no se usa (la sesion
+  // va en cookie), y dejarlo ahi solo seria una credencial vieja al aire.
+  try { localStorage.removeItem("iptv_token"); } catch {}
+  // La URL ya no debe llevar credenciales; si viene una de un enlace antiguo, se
+  // limpia para no dejarla en el historial ni en la barra de direcciones.
+  if (location.search) history.replaceState(null, "", location.pathname);
+
+  wireControls();
+
+  // ¿Hay que crear la primera cuenta, o ya se puede iniciar sesion?
+  let info = { needsSetup: false, session: null };
+  try {
+    info = await (await fetch("/api/auth", { credentials: "include" })).json();
+  } catch {
+    showLogin("No se pudo conectar con la app de escritorio.");
     return;
   }
-  const saved = localStorage.getItem("iptv_token");
-  if (saved) {
-    tryStart(saved).then((ok) => { if (!ok) showLogin(); });
-  } else {
-    showLogin();
-  }
+  setSetupMode(Boolean(info.needsSetup));
+
+  // Si el navegador ya tenia sesion valida, entrar directo.
+  if (info.session && await tryResumeSession()) return;
+  showLogin();
 })();

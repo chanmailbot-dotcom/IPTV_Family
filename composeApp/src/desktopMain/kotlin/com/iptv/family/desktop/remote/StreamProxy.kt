@@ -37,8 +37,21 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class StreamProxy(private val client: HttpClient) {
 
-    /** Manifest ya bajado y su marca de tiempo, para reusarlo entre consumidores. */
-    private data class CachedManifest(val raw: String, val finalUrl: String, val at: Long)
+    /**
+     * Manifest ya bajado y su marca de tiempo, para reusarlo entre consumidores.
+     *
+     * [ttlMs] se deriva del propio manifest (#EXT-X-TARGETDURATION): un TTL fijo
+     * de 2 s hacia que, con dos consumidores (VLC local + navegador) preguntando,
+     * saliera ~1 peticion por segundo hacia el panel, cuando un reproductor normal
+     * pide la lista una vez por duracion de segmento (6-10 s). El panel lo tomaba
+     * por abuso y respondia 407, y ahi empezaba el corte.
+     */
+    private data class CachedManifest(
+        val raw: String,
+        val finalUrl: String,
+        val at: Long,
+        val ttlMs: Long,
+    )
 
     /** Segmento ya bajado: los segmentos HLS son inmutables, se cachean enteros. */
     private class CachedSegment(val bytes: ByteArray, val type: ContentType, val at: Long)
@@ -53,6 +66,9 @@ class StreamProxy(private val client: HttpClient) {
     private val manifestCache = ConcurrentHashMap<String, CachedManifest>()
     private val segmentCache = ConcurrentHashMap<String, CachedSegment>()
 
+    /** Hasta cuando no volver a pedirle la lista al panel, por URL, tras un rechazo. */
+    private val manifestBackoffUntil = ConcurrentHashMap<String, Long>()
+
     /**
      * Serializa TODO el trafico upstream: aunque haya 3 consumidores (VLC, un
      * navegador, otro movil), hacia el proveedor hay como maximo 1 peticion en
@@ -64,16 +80,35 @@ class StreamProxy(private val client: HttpClient) {
     suspend fun proxyManifest(call: ApplicationCall, originUrl: String) {
         call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
         val hit = manifestCache[originUrl]
-        if (hit != null && System.currentTimeMillis() - hit.at < MANIFEST_TTL_MS) {
+        if (hit != null && System.currentTimeMillis() - hit.at < hit.ttlMs) {
             respondManifest(call, hit.finalUrl, hit.raw)
             return
         }
         when (val r = fetchManifest(originUrl)) {
             is Upstream.Text -> respondManifest(call, r.finalUrl, r.text)
-            is Upstream.Failed -> call.respondText("", ContentType.Text.Plain, HttpStatusCode.fromValue(r.status))
-            is Upstream.Error -> {
-                AppLog.e("StreamProxy", "mux manifest: fallo de red con ${AppLog.redactUrl(originUrl)}: ${r.message}")
-                call.respondText("", ContentType.Text.Plain, HttpStatusCode.BadGateway)
+            // Ante un fallo de upstream, servir la ultima lista buena si no es muy
+            // vieja ("stale-while-error"). Propagar el error hacia el reproductor
+            // hacia que este reintentase mas rapido, lo que provocaba mas 407 del
+            // panel: un bucle que acababa parando la emision. Con la lista de hace
+            // unos segundos el reproductor sigue con los segmentos que ya conoce
+            // mientras el mux espera a que el panel se calme.
+            is Upstream.Failed, is Upstream.Error -> {
+                val stale = manifestCache[originUrl]
+                if (stale != null && System.currentTimeMillis() - stale.at < STALE_MANIFEST_MAX_MS) {
+                    AppLog.w(
+                        "StreamProxy",
+                        "mux manifest: upstream fallo, sirviendo la ultima lista buena" +
+                            " (${System.currentTimeMillis() - stale.at} ms de antiguedad)"
+                    )
+                    respondManifest(call, stale.finalUrl, stale.raw)
+                } else when (r) {
+                    is Upstream.Failed -> call.respondText("", ContentType.Text.Plain, HttpStatusCode.fromValue(r.status))
+                    is Upstream.Error -> {
+                        AppLog.e("StreamProxy", "mux manifest: fallo de red con ${AppLog.redactUrl(originUrl)}: ${r.message}")
+                        call.respondText("", ContentType.Text.Plain, HttpStatusCode.BadGateway)
+                    }
+                    else -> Unit
+                }
             }
             is Upstream.Binary -> Unit // imposible en un manifest
         }
@@ -83,8 +118,15 @@ class StreamProxy(private val client: HttpClient) {
         // Doble comprobacion dentro del lock: mientras esperabamos el turno, otro
         // consumidor pudo traer este mismo manifest (single-flight real).
         val hit = manifestCache[originUrl]
-        if (hit != null && System.currentTimeMillis() - hit.at < MANIFEST_TTL_MS) {
+        if (hit != null && System.currentTimeMillis() - hit.at < hit.ttlMs) {
             return@withLock Upstream.Text(hit.raw, hit.finalUrl)
+        }
+        // Freno tras un rechazo: si el panel acaba de contestar 407/513, insistir
+        // de inmediato solo alarga el bloqueo. Se deja pasar un momento y mientras
+        // el llamante sirve la ultima lista buena.
+        val blockedUntil = manifestBackoffUntil[originUrl]
+        if (blockedUntil != null && System.currentTimeMillis() < blockedUntil) {
+            return@withLock Upstream.Failed(429)
         }
         runCatching {
             client.prepareGet(originUrl) {
@@ -92,10 +134,11 @@ class StreamProxy(private val client: HttpClient) {
             }.execute { response ->
                 val status = response.status.value
                 if (status !in 200..299) {
-                    // El panel rechazo el manifiesto (513/404/...): propagar el codigo para
-                    // que hls.js falle rapido y la web muestre "canal caido" en vez de
-                    // quedarse encadenando reintentos contra un 200-vacio.
+                    // El panel rechazo el manifiesto (407/513/404...). El llamante
+                    // servira la ultima lista buena si la tiene; aqui solo se anota
+                    // para no volver a insistir de inmediato.
                     AppLog.w("StreamProxy", "mux manifest: upstream $status para ${AppLog.redactUrl(originUrl)}")
+                    manifestBackoffUntil[originUrl] = System.currentTimeMillis() + MANIFEST_BACKOFF_MS
                     Upstream.Failed(status)
                 } else {
                     val text = response.bodyAsText()
@@ -104,7 +147,13 @@ class StreamProxy(private val client: HttpClient) {
                     // upstream, no contra la original, o cada consumidor acabaria en un
                     // host/sesion distinto (y el panel contaria conexiones nuevas).
                     val finalUrl = response.call.request.url.toString()
-                    manifestCache[originUrl] = CachedManifest(text, finalUrl, System.currentTimeMillis())
+                    manifestBackoffUntil.remove(originUrl)
+                    manifestCache[originUrl] = CachedManifest(
+                        raw = text,
+                        finalUrl = finalUrl,
+                        at = System.currentTimeMillis(),
+                        ttlMs = manifestTtlFor(text),
+                    )
                     Upstream.Text(text, finalUrl)
                 }
             }
@@ -115,7 +164,7 @@ class StreamProxy(private val client: HttpClient) {
         // El <video> del navegador no puede enviar cabeceras Authorization: propagamos el
         // token con el que se pidio este manifest a cada URL reescrita, para que los
         // segmentos (y sub-manifiestos y claves) autentiquen por query y no reciban 401.
-        val token = RemoteAuth.callToken(call)
+        val token = RemoteAuth.sessionToken(call)
         // Base de resolucion de URIs relativas: la URL final (tras redirecciones).
         val base = finalUrl.substringBeforeLast('/', missingDelimiterValue = "")
         val rewritten = text.lineSequence().joinToString("\n") { line ->
@@ -129,6 +178,25 @@ class StreamProxy(private val client: HttpClient) {
             }
         }
         call.respondText(rewritten, ContentType.parse("application/vnd.apple.mpegurl"))
+    }
+
+    /**
+     * Cuanto se puede reusar esta lista antes de volver a preguntar al panel.
+     *
+     * Un reproductor HLS refresca una lista de directo cada ~duracion de segmento.
+     * Con dos consumidores (VLC local + navegador) y un TTL fijo de 2 s salian ~2
+     * peticiones por segundo hacia el panel: por eso contestaba 407. Se usa la
+     * mitad de #EXT-X-TARGETDURATION, que es la recomendacion del propio HLS, con
+     * un minimo de 3 s para no pasarse de listo con targetduration pequeños.
+     *
+     * Una lista VOD (#EXT-X-ENDLIST) no cambia nunca: se puede cachear largo.
+     */
+    private fun manifestTtlFor(text: String): Long {
+        if (text.contains("#EXT-X-ENDLIST")) return VOD_MANIFEST_TTL_MS
+        val target = Regex("#EXT-X-TARGETDURATION:\\s*(\\d+)")
+            .find(text)?.groupValues?.get(1)?.toLongOrNull()
+        val half = target?.let { it * 1000 / 2 } ?: 0L
+        return half.coerceAtLeast(MIN_MANIFEST_TTL_MS)
     }
 
     /** Resuelve una referencia (relativa o absoluta) contra la base del manifest. */
@@ -215,7 +283,7 @@ class StreamProxy(private val client: HttpClient) {
 
     private fun segmentProxyUrl(url: String, token: String?): String {
         val base = "/stream/segment?src=" + URLEncoder.encode(url, "UTF-8")
-        return if (token.isNullOrBlank()) base else base + "&token=" + URLEncoder.encode(token, "UTF-8")
+        return if (token.isNullOrBlank()) base else base + "&s=" + URLEncoder.encode(token, "UTF-8")
     }
 
     companion object {
@@ -225,11 +293,28 @@ class StreamProxy(private val client: HttpClient) {
         fun looksLikeManifest(url: String): Boolean = url.substringBefore('?').endsWith(".m3u8")
 
         /**
-         * Reutilizacion de un manifest ya bajado. Corto a proposito: si fuese mayor que
-         * el ciclo de refresco de los reproductores, servirian playlists congeladas y
-         * el directo se pararia; su funcion es solo deduplicar peticiones simultaneas.
+         * Suelo del TTL de un manifest de directo (ver [manifestTtlFor], que lo
+         * calcula de #EXT-X-TARGETDURATION). Antes habia aqui un TTL fijo de 2 s
+         * que, con dos consumidores, disparaba ~2 peticiones/segundo al panel y
+         * acababa en 407 -> emision cortada.
          */
-        const val MANIFEST_TTL_MS = 2_000L
+        const val MIN_MANIFEST_TTL_MS = 3_000L
+
+        /** Una lista con #EXT-X-ENDLIST (pelicula/serie) ya no cambia nunca. */
+        const val VOD_MANIFEST_TTL_MS = 300_000L
+
+        /**
+         * Tras un rechazo del panel, tiempo sin volver a pedirle la lista. Mientras,
+         * se sirve la ultima buena: el reproductor sigue con los segmentos que ya
+         * conoce en vez de entrar en un bucle de reintentos.
+         */
+        const val MANIFEST_BACKOFF_MS = 2_000L
+
+        /**
+         * Cuanto se puede seguir sirviendo una lista vieja cuando el panel falla.
+         * Pasado esto es mejor admitir el error que fingir un directo congelado.
+         */
+        const val STALE_MANIFEST_MAX_MS = 30_000L
 
         /** Los segmentos son inmutables: TTL alto y eviction solo por tamaño. */
         const val SEGMENT_TTL_MS = 600_000L

@@ -24,12 +24,18 @@
         <p>Control remoto y visión en directo</p>
       </div>
       <form id="login-form" novalidate>
-        <label class="field" for="token-input">
-          <span class="field-label">Token de acceso</span>
+        <label class="field" for="user-input">
+          <span class="field-label">Usuario</span>
           <span class="field-box">
-            <input id="token-input" type="password" autocomplete="current-password"
-                   placeholder="Pega el token de Ajustes → Servidor web" spellcheck="false">
-            <button type="button" id="toggle-token" class="eye-btn" aria-label="Mostrar token" title="Mostrar / ocultar">
+            <input id="user-input" type="text" autocomplete="username" autocapitalize="off"
+                   placeholder="Tu usuario" spellcheck="false">
+          </span>
+        </label>
+        <label class="field" for="pass-input">
+          <span class="field-label">Contraseña</span>
+          <span class="field-box">
+            <input id="pass-input" type="password" autocomplete="current-password" placeholder="Tu contraseña">
+            <button type="button" id="toggle-pass" class="eye-btn" aria-label="Mostrar contraseña" title="Mostrar / ocultar">
               <svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </span>
@@ -37,7 +43,7 @@
         <p id="login-error" class="login-error" role="alert" hidden></p>
         <button type="submit" id="login-submit" class="btn btn-primary btn-block">Entrar</button>
       </form>
-      <p class="login-hint">El token se genera en la app de escritorio, en <strong>Ajustes → Servidor web</strong>.</p>
+      <p class="login-hint" id="login-hint">Las cuentas se crean en la app de escritorio, en <strong>Ajustes → Servidor web</strong>.</p>
     </div>
   </section>
 
@@ -76,6 +82,12 @@
           </button>
         </div>
         <span id="role-badge" class="role-badge" hidden></span>
+        <button id="btn-users" class="icon-btn" title="Usuarios" aria-label="Gestionar usuarios" hidden>
+          <svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.2 2.7-5 6-5s6 1.8 6 5"/><path d="M16 11a3 3 0 1 0 0-6"/><path d="M18 20c0-2.4-.8-4-2-4.6"/></svg>
+        </button>
+        <button id="btn-logout" class="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h9"/></svg>
+        </button>
         <div id="connection" class="connection is-offline" role="status">
           <span class="dot" aria-hidden="true"></span><span id="connection-label">Conectando…</span>
         </div>
@@ -175,6 +187,28 @@
       </aside>
     </main>
   </div>
+
+  <!-- Gestión de usuarios (solo administrador) -->
+  <dialog id="users-dialog" class="users-dialog">
+    <h2>Usuarios</h2>
+    <div id="users-list" class="users-list"></div>
+    <form id="new-user-form" class="new-user-form" novalidate>
+      <h3>Añadir cuenta</h3>
+      <div class="new-user-row">
+        <input id="nu-name" type="text" placeholder="Usuario" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <input id="nu-pass" type="password" placeholder="Contraseña (mín. 6)" autocomplete="new-password">
+      </div>
+      <label class="nu-role">
+        <input id="nu-admin" type="checkbox">
+        <span>Administrador (si no, solo podrá ver)</span>
+      </label>
+      <p id="users-msg" class="users-msg" role="status"></p>
+      <div class="users-actions">
+        <button type="submit" class="btn btn-primary">Crear</button>
+        <button type="button" id="users-close" class="btn">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="/hls.min.js"></script>
   <script src="/app.js" defer></script>

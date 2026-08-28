@@ -1,70 +1,143 @@
 package com.iptv.family.desktop.remote
 
+import com.iptv.family.shared.data.auth.PasswordHasher
+import com.iptv.family.shared.model.WebRole
+import com.iptv.family.shared.model.WebUser
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.header
-import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
 
-/** Quien esta al otro lado: manda o solo mira. */
-enum class RemoteRole {
-    /** Control total: cambiar de canal, favoritos, volumen, pausa. */
-    ADMIN,
-
-    /** Solo ver lo que el administrador ha puesto. Nada de escritura. */
-    VIEWER,
-    ;
-
-    val isAdmin: Boolean get() = this == ADMIN
+/** Sesion abierta de un usuario en un navegador concreto. */
+data class RemoteSession(
+    val token: String,
+    val username: String,
+    val role: WebRole,
+    val createdAt: Long,
+    @Volatile var lastSeenAt: Long,
+) {
+    val isAdmin: Boolean get() = role == WebRole.ADMIN
 }
 
 /**
- * Autenticacion por token compartido para el servidor de control remoto.
+ * Autenticacion del servidor de control remoto: usuario + contraseña, con
+ * sesiones en memoria.
  *
- * Hay dos tokens independientes ([RemoteRole]): el de administrador y el de
- * invitado. El token vale como header Bearer, como query param (necesario para
- * EventSource y <video>, que no permiten headers custom) o como cookie de
- * sesion (la que planta /login para no teclear el token en cada carga). El
- * valor de la cookie ES el propio token: regenerar un token invalida cualquier
- * cookie/URL antigua al instante, sin necesitar una tabla de sesiones aparte
- * -- y como el rol se deduce de comparar contra el token vigente, degradar a
- * un invitado es tan simple como regenerar su token.
+ * Antes esto era un token compartido que iba en la URL. Se cambio a cuentas
+ * porque el token no identifica a nadie (no se sabe quien lo esta usando), no se
+ * puede revocar a una sola persona sin echar a todas, y viajaba a la vista en
+ * los enlaces. Ahora cada persona tiene su cuenta y el administrador puede
+ * crearlas, cambiarles la contraseña o borrarlas.
+ *
+ * Las sesiones viven en memoria a proposito: al reiniciar la app de escritorio
+ * todo el mundo vuelve a identificarse, que es el comportamiento seguro por
+ * defecto y evita tener que guardar (y caducar) tokens en disco.
  */
 object RemoteAuth {
-    private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    private val random = SecureRandom()
 
     const val SESSION_COOKIE = "iptv_session"
 
-    fun generateToken(length: Int = 24): String =
-        (1..length).map { ALPHABET[random.nextInt(ALPHABET.length)] }.joinToString("")
+    /** Caducidad de una sesion sin actividad. */
+    private const val SESSION_IDLE_TIMEOUT_MS = 30L * 24 * 60 * 60 * 1000 // 30 dias
+
+    private val sessions = ConcurrentHashMap<String, RemoteSession>()
+
+    // ------------------------------------------------------------------
+    // Login / logout
+    // ------------------------------------------------------------------
 
     /**
-     * Rol de esta peticion, o null si el token no vale para nada.
-     *
-     * El de administrador gana: si por accidente ambos tokens fueran iguales,
-     * el acceso es de administrador y no un invitado con permisos de mas.
+     * Comprueba las credenciales y abre una sesion. Devuelve null si el usuario
+     * no existe o la contraseña no es correcta -- deliberadamente sin distinguir
+     * entre ambos casos, para no confirmar que un usuario existe.
      */
-    fun roleFor(call: ApplicationCall, adminToken: String?, viewerToken: String?): RemoteRole? {
-        val presented = presentedTokens(call)
-        if (presented.isEmpty()) return null
-        if (!adminToken.isNullOrBlank() && presented.any { it == adminToken }) return RemoteRole.ADMIN
-        if (!viewerToken.isNullOrBlank() && presented.any { it == viewerToken }) return RemoteRole.VIEWER
-        return null
+    fun login(users: List<WebUser>, username: String, password: String): RemoteSession? {
+        val user = users.firstOrNull { it.username.equals(username.trim(), ignoreCase = true) }
+        if (user == null) {
+            // Se calcula un hash de todas formas para que un usuario inexistente
+            // tarde lo mismo que uno con contraseña incorrecta: si no, el tiempo de
+            // respuesta revelaria que cuentas existen.
+            PasswordHasher.verify(DUMMY_USER, password)
+            return null
+        }
+        if (!PasswordHasher.verify(user, password)) return null
+
+        val now = System.currentTimeMillis()
+        val session = RemoteSession(
+            token = PasswordHasher.newSessionToken(),
+            username = user.username,
+            role = user.role,
+            createdAt = now,
+            lastSeenAt = now,
+        )
+        sessions[session.token] = session
+        purgeExpired()
+        return session
+    }
+
+    fun logout(call: ApplicationCall) {
+        sessionToken(call)?.let { sessions.remove(it) }
+    }
+
+    /** Cierra todas las sesiones de un usuario (al borrarlo o cambiarle la contraseña). */
+    fun revokeSessionsOf(username: String) {
+        sessions.entries.removeIf { it.value.username.equals(username, ignoreCase = true) }
+    }
+
+    fun revokeAll() = sessions.clear()
+
+    // ------------------------------------------------------------------
+    // Consulta
+    // ------------------------------------------------------------------
+
+    /**
+     * Sesion de esta peticion, o null si no hay ninguna valida.
+     *
+     * [users] sirve para revalidar el rol en cada peticion: si el administrador
+     * degrada a alguien a invitado, no hay que esperar a que cierre sesion.
+     */
+    fun sessionFor(call: ApplicationCall, users: List<WebUser>): RemoteSession? {
+        val token = sessionToken(call) ?: return null
+        val session = sessions[token] ?: return null
+        val now = System.currentTimeMillis()
+        if (now - session.lastSeenAt > SESSION_IDLE_TIMEOUT_MS) {
+            sessions.remove(token)
+            return null
+        }
+        // El usuario pudo ser borrado (o degradado) mientras su sesion seguia viva.
+        val user = users.firstOrNull { it.username.equals(session.username, ignoreCase = true) }
+        if (user == null) {
+            sessions.remove(token)
+            return null
+        }
+        session.lastSeenAt = now
+        return if (user.role == session.role) session else session.copy(role = user.role)
+            .also { sessions[token] = it }
     }
 
     /**
-     * Todos los sitios de los que puede venir un token, sin quedarse en el
-     * primero: un invitado puede tener la cookie de invitado plantada y aun asi
-     * abrir un enlace `?token=` de administrador (o al reves). Si solo se mirara
-     * el primero que aparece, el enlace nuevo no tendria efecto hasta borrar la
-     * cookie a mano.
+     * El token de sesion de esta peticion, buscando en cookie, query y Bearer.
+     *
+     * La query es imprescindible: `<video>`, hls.js y EventSource no pueden
+     * mandar cabeceras propias, asi que el reproductor y el canal de eventos
+     * autentican por ahi.
      */
-    private fun presentedTokens(call: ApplicationCall): List<String> = listOfNotNull(
-        call.request.queryParameters["token"],
+    fun sessionToken(call: ApplicationCall): String? = listOfNotNull(
         call.request.cookies[SESSION_COOKIE],
+        call.request.queryParameters["s"],
         call.request.header(HttpHeaders.Authorization)?.removePrefix("Bearer ")?.trim(),
-    ).filter { it.isNotBlank() }
+    ).firstOrNull { it.isNotBlank() }
 
-    /** Recupera el token con el que autentico esta peticion (query, cookie o Bearer), o null. */
-    fun callToken(call: ApplicationCall): String? = presentedTokens(call).firstOrNull()
+    private fun purgeExpired() {
+        val now = System.currentTimeMillis()
+        sessions.entries.removeIf { now - it.value.lastSeenAt > SESSION_IDLE_TIMEOUT_MS }
+    }
+
+    /**
+     * Usuario de pega, solo para gastar el mismo tiempo de CPU cuando el nombre
+     * de usuario no existe (ver [login]).
+     */
+    private val DUMMY_USER: WebUser by lazy {
+        PasswordHasher.createUser("__nadie__", "contraseña que no vale", WebRole.VIEWER)
+    }
 }

@@ -2,8 +2,12 @@ package com.iptv.family.desktop.remote
 
 import com.iptv.family.desktop.player.VlcController
 import com.iptv.family.desktop.state.AppState
+import com.iptv.family.shared.data.auth.PasswordHasher
 import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Channel
+import com.iptv.family.shared.model.WebRole
+import com.iptv.family.shared.model.WebUser
+import java.io.File
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO as ClientCIO
 import io.ktor.client.plugins.HttpTimeout
@@ -29,6 +33,7 @@ import io.ktor.server.request.queryString
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondTextWriter
@@ -90,14 +95,42 @@ class RemoteWebServer(
     }
     private val streamProxy = StreamProxy(httpClient)
 
-    private fun adminToken(): String? = appState.settings.webServerToken
-    private fun viewerToken(): String? = appState.settings.webViewerToken
+    /** Puerto en el que escucha, para poder apuntar ffmpeg al mux local. */
+    private var listeningPort: Int = 0
+
+    /**
+     * Convierte a AAC el audio que el navegador no puede reproducir. Se crea solo
+     * si hay ffmpeg disponible; sin el, la web sigue funcionando (sin sonido en
+     * los canales con AC-3/MP2, avisando de por que).
+     */
+    private var transcoder: AudioTranscoder? = null
+    private var ffmpeg: String? = null
+
+    /** Cache de codec de audio por canal, para no lanzar un ffprobe por peticion. */
+    private val audioCodecByChannel = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun users(): List<WebUser> = appState.settings.webUsers
 
     fun start(port: Int) {
         if (engine != null) return
         AppLog.d("RemoteServer", "start: puerto=$port")
+        listeningPort = port
         val bus = RemoteEventBus(appState, controller, scope)
         eventBus = bus
+
+        if (appState.settings.transcodeAudioForWeb) {
+            ffmpeg = AudioTranscoder.resolveFfmpeg(appState.settings.ffmpegPath)
+            if (ffmpeg == null) {
+                AppLog.w(
+                    "RemoteServer",
+                    "conversion de audio activada pero no se encontro ffmpeg: los canales con AC-3/MP2 seguiran sin sonido en la web"
+                )
+            } else {
+                val dir = File(System.getProperty("java.io.tmpdir"), "iptv-family-transcode")
+                transcoder = AudioTranscoder(ffmpeg!!, dir)
+                AppLog.d("RemoteServer", "conversion de audio lista (ffmpeg: $ffmpeg)")
+            }
+        }
 
         engine = embeddedServer(ServerCIO, port = port) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
@@ -162,40 +195,166 @@ class RemoteWebServer(
                     )
                 }
 
-                post("/login") {
-                    // receiveJson (receiveText + Json): responde siempre
-                    // (200 con cookie o 401 JSON), nunca deja la conexion a medias.
-                    val reqToken = call.receiveJson<LoginRequest>()?.token?.trim()
-                    val role = when {
-                        reqToken.isNullOrBlank() -> null
-                        reqToken == adminToken() -> RemoteRole.ADMIN
-                        reqToken == viewerToken() -> RemoteRole.VIEWER
-                        else -> null
-                    }
-                    if (role != null) {
-                        call.response.cookies.append(
-                            Cookie(
-                                name = RemoteAuth.SESSION_COOKIE,
-                                value = reqToken!!,
-                                path = "/",
-                                maxAge = 60 * 60 * 24 * 30,
-                                httpOnly = true,
-                            )
+                /**
+                 * Estado del login ANTES de identificarse: le dice a la web si hay
+                 * que crear la primera cuenta de administrador o si ya se puede
+                 * iniciar sesion. Es el unico endpoint publico a proposito.
+                 */
+                get("/api/auth") {
+                    call.respond(
+                        AuthInfoDto(
+                            needsSetup = users().isEmpty(),
+                            session = RemoteAuth.sessionFor(call, users())?.let {
+                                SessionDto(it.username, it.role.name.lowercase())
+                            },
                         )
-                        call.respond(mapOf("ok" to true, "role" to role.name.lowercase()))
-                    } else {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "invalid_token"))
+                    )
+                }
+
+                /**
+                 * Crea la PRIMERA cuenta de administrador. Solo funciona mientras no
+                 * haya ningun usuario: en cuanto existe uno, las cuentas nuevas las
+                 * crea el administrador ya identificado (ver /api/users).
+                 */
+                post("/api/setup") {
+                    if (users().isNotEmpty()) {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "already_configured"))
+                        return@post
                     }
+                    val req = call.receiveJson<LoginRequest>()
+                    val error = validateCredentials(req?.username, req?.password)
+                    if (error != null) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to error))
+                        return@post
+                    }
+                    val user = PasswordHasher.createUser(req!!.username, req.password, WebRole.ADMIN)
+                    // .join(): hay que ESPERAR a que la cuenta este guardada antes de
+                    // contestar. Sin esto la web hacia login inmediatamente despues y
+                    // se encontraba con que todavia no habia usuarios.
+                    scope.launch { appState.mutateSettings { copy(webUsers = listOf(user)) } }.join()
+                    AppLog.d("RemoteServer", "creada la cuenta de administrador '${user.username}'")
+                    call.respond(mapOf("ok" to true))
+                }
+
+                post("/login") {
+                    // receiveJson (receiveText + Json): responde siempre, nunca deja
+                    // la conexion a medias ante un cuerpo invalido.
+                    val req = call.receiveJson<LoginRequest>()
+                    val session = req?.let { RemoteAuth.login(users(), it.username, it.password) }
+                    if (session == null) {
+                        AppLog.w("RemoteServer", "login fallido para '${req?.username}'")
+                        // Mismo mensaje si el usuario no existe o la contraseña falla:
+                        // no se confirma que cuentas existen.
+                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "invalid_credentials"))
+                        return@post
+                    }
+                    call.response.cookies.append(
+                        Cookie(
+                            name = RemoteAuth.SESSION_COOKIE,
+                            value = session.token,
+                            path = "/",
+                            maxAge = 60 * 60 * 24 * 30,
+                            httpOnly = true,
+                        )
+                    )
+                    AppLog.d("RemoteServer", "login de '${session.username}' (${session.role})")
+                    call.respond(
+                        LoginResponseDto(
+                            username = session.username,
+                            role = session.role.name.lowercase(),
+                            streamKey = session.token,
+                        )
+                    )
+                }
+
+                post("/logout") {
+                    RemoteAuth.logout(call)
+                    call.response.cookies.append(
+                        Cookie(name = RemoteAuth.SESSION_COOKIE, value = "", path = "/", maxAge = 0)
+                    )
+                    call.respond(mapOf("ok" to true))
                 }
 
                 get("/api/state") {
-                    val role = roleOf(call)
-                    if (role == null) {
-                        call.response.header(HttpHeaders.WWWAuthenticate, "Bearer")
+                    val session = sessionOf(call)
+                    if (session == null) {
                         call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))
                         return@get
                     }
-                    call.respond(buildStateDto(bus, role))
+                    call.respond(buildStateDto(bus, session))
+                }
+
+                // ---- Gestion de usuarios (solo administrador) ----
+
+                get("/api/users") {
+                    if (!requireAdmin()) return@get
+                    call.respond(users().map { UserDto(it.username, it.role.name.lowercase(), it.createdAt) })
+                }
+
+                post("/api/users") {
+                    if (!requireAdmin()) return@post
+                    val req = call.receiveJson<CreateUserRequest>()
+                    val error = validateCredentials(req?.username, req?.password)
+                    if (error != null) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to error))
+                        return@post
+                    }
+                    if (users().any { it.username.equals(req!!.username.trim(), ignoreCase = true) }) {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "username_taken"))
+                        return@post
+                    }
+                    val role = if (req!!.role.equals("admin", ignoreCase = true)) WebRole.ADMIN else WebRole.VIEWER
+                    val user = PasswordHasher.createUser(req.username, req.password, role)
+                    scope.launch { appState.mutateSettings { copy(webUsers = webUsers + user) } }.join()
+                    AppLog.d("RemoteServer", "creado el usuario '${user.username}' ($role)")
+                    call.respond(mapOf("ok" to true))
+                }
+
+                post("/api/users/{username}/password") {
+                    if (!requireAdmin()) return@post
+                    val username = call.parameters["username"].orEmpty()
+                    val password = call.receiveJson<PasswordRequest>()?.password
+                    if (password == null || password.length < MIN_PASSWORD_LENGTH) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "weak_password"))
+                        return@post
+                    }
+                    val existing = users().firstOrNull { it.username.equals(username, ignoreCase = true) }
+                    if (existing == null) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "no_such_user"))
+                        return@post
+                    }
+                    val updated = PasswordHasher.withNewPassword(existing, password)
+                    scope.launch {
+                        appState.mutateSettings {
+                            copy(webUsers = webUsers.map { if (it.username == existing.username) updated else it })
+                        }
+                    }.join()
+                    // Cambiar la contraseña echa a quien estuviera usando la antigua.
+                    RemoteAuth.revokeSessionsOf(existing.username)
+                    call.respond(mapOf("ok" to true))
+                }
+
+                post("/api/users/{username}/delete") {
+                    if (!requireAdmin()) return@post
+                    val username = call.parameters["username"].orEmpty()
+                    val existing = users().firstOrNull { it.username.equals(username, ignoreCase = true) }
+                    if (existing == null) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "no_such_user"))
+                        return@post
+                    }
+                    // No dejar el sistema sin ningun administrador: nadie podria volver
+                    // a gestionar usuarios sin editar settings.json a mano.
+                    val admins = users().count { it.role == WebRole.ADMIN }
+                    if (existing.role == WebRole.ADMIN && admins <= 1) {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "last_admin"))
+                        return@post
+                    }
+                    scope.launch {
+                        appState.mutateSettings { copy(webUsers = webUsers.filterNot { it.username == existing.username }) }
+                    }.join()
+                    RemoteAuth.revokeSessionsOf(existing.username)
+                    AppLog.d("RemoteServer", "borrado el usuario '${existing.username}'")
+                    call.respond(mapOf("ok" to true))
                 }
 
                 post("/api/channel/{id}") {
@@ -335,18 +494,48 @@ class RemoteWebServer(
                 // resincronizar. Con `ch` en la query, cada cambio de canal es un
                 // recurso nuevo y la recarga es limpia e inmediata.
                 get("/stream/current.m3u8") {
-                    if (!requireAuth()) return@get
+                    if (!requireStreamAccess()) return@get
                     val url = controller?.currentUrl
                     if (url == null) {
                         call.respond(HttpStatusCode.NotFound)
                         return@get
                     }
+
+                    // Si el canal trae audio que el navegador no sabe decodificar
+                    // (AC-3, MP2...), se sirve la version con el audio convertido a
+                    // AAC por ffmpeg en vez del stream original.
+                    //
+                    // `nt=1` lo pone ffmpeg/ffprobe al leer de aqui: para ellos hay
+                    // que servir SIEMPRE el stream original, o se les devolveria su
+                    // propia salida y se quedarian dando vueltas sobre si mismos.
+                    val noTranscode = call.request.queryParameters["nt"] == "1"
+                    if (!noTranscode) {
+                        val transcoded = transcodedPlaylistOrNull()
+                        if (transcoded != null) {
+                            respondTranscodedPlaylist(call, transcoded)
+                            return@get
+                        }
+                    }
+
                     if (StreamProxy.looksLikeManifest(url)) streamProxy.proxyManifest(call, url)
                     else streamProxy.proxySegment(call, url)
                 }
 
+                /** Segmentos que produce ffmpeg (audio ya convertido a AAC). */
+                get("/stream/aac/{name}") {
+                    if (!requireStreamAccess()) return@get
+                    val name = call.parameters["name"].orEmpty()
+                    val file = transcoder?.segmentFile(name)
+                    if (file == null || !file.isFile) {
+                        call.respond(HttpStatusCode.NotFound)
+                        return@get
+                    }
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    call.respondBytes(file.readBytes(), ContentType.parse("video/mp2t"))
+                }
+
                 get("/stream/segment") {
-                    if (!requireAuth()) return@get
+                    if (!requireStreamAccess()) return@get
                     val src = call.request.queryParameters["src"]
                     if (src == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -363,39 +552,136 @@ class RemoteWebServer(
     fun stop() {
         eventBus?.stop()
         eventBus = null
+        // Antes que el engine: hay que matar ffmpeg o quedaria un proceso huerfano
+        // consumiendo CPU y red despues de apagar el servidor.
+        transcoder?.stop()
+        transcoder = null
+        audioCodecByChannel.clear()
         engine?.stop(1000, 2000)
         engine = null
         AppLog.d("RemoteServer", "stop")
     }
 
-    private fun roleOf(call: ApplicationCall): RemoteRole? =
-        RemoteAuth.roleFor(call, adminToken(), viewerToken())
+    private fun sessionOf(call: ApplicationCall): RemoteSession? =
+        RemoteAuth.sessionFor(call, users())
 
-    /** Cualquier rol valido (administrador o invitado). */
+    /** Cualquier sesion valida (administrador o invitado). */
     private suspend fun PipelineContext<Unit, ApplicationCall>.requireAuth(): Boolean {
-        if (roleOf(call) != null) return true
-        call.response.header(HttpHeaders.WWWAuthenticate, "Bearer")
+        if (sessionOf(call) != null) return true
         call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))
         return false
     }
 
     /**
+     * Como [requireAuth], pero acepta tambien la clave interna del mux: es la que
+     * usan el VLC del escritorio y ffmpeg, que no tienen cuenta de usuario (ver
+     * [LocalMuxKey]).
+     */
+    private suspend fun PipelineContext<Unit, ApplicationCall>.requireStreamAccess(): Boolean {
+        if (call.request.queryParameters[LocalMuxKey.PARAM] == LocalMuxKey.value) return true
+        return requireAuth()
+    }
+
+    /**
      * Solo administrador. Todo lo que cambia algo (canal, favoritos, volumen,
-     * pausa) pasa por aqui: un invitado ve, pero no toca.
+     * pausa, usuarios) pasa por aqui: un invitado ve, pero no toca.
      */
     private suspend fun PipelineContext<Unit, ApplicationCall>.requireAdmin(): Boolean {
-        val role = roleOf(call)
-        if (role == null) {
-            call.response.header(HttpHeaders.WWWAuthenticate, "Bearer")
+        val session = sessionOf(call)
+        if (session == null) {
             call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))
             return false
         }
-        if (!role.isAdmin) {
-            AppLog.w("RemoteServer", "invitado intento una accion de administrador: ${call.request.local.uri}")
+        if (!session.isAdmin) {
+            AppLog.w(
+                "RemoteServer",
+                "'${session.username}' (invitado) intento una accion de administrador: ${call.request.local.uri}"
+            )
             call.respond(HttpStatusCode.Forbidden, mapOf("error" to "viewer_read_only"))
             return false
         }
         return true
+    }
+
+    /**
+     * Lista HLS con el audio ya convertido a AAC para el canal en curso, o null
+     * si no hace falta (el canal ya trae audio que el navegador entiende, o no
+     * hay ffmpeg, o la conversion esta desactivada).
+     *
+     * El codec se averigua una sola vez por canal con ffprobe y se recuerda: es
+     * una operacion de varios segundos y no puede hacerse en cada peticion de
+     * manifest (que llegan cada pocos segundos).
+     */
+    private fun transcodedPlaylistOrNull(): File? {
+        val tc = transcoder ?: return null
+        val ff = ffmpeg ?: return null
+        val channelId = currentChannelId() ?: return null
+
+        val codec = audioCodecByChannel.getOrPut(channelId) {
+            // ffprobe apunta al mux local, no al panel: asi no abre una conexion
+            // propia contra el proveedor (ver comentario en AudioTranscoder).
+            val probeUrl = localMuxUrl() ?: return null
+            val detected = AudioTranscoder.probeAudioCodec(ff, probeUrl)
+            AppLog.d("RemoteServer", "canal $channelId: audio detectado = ${detected ?: "desconocido"}")
+            detected ?: UNKNOWN_CODEC
+        }
+        if (codec == UNKNOWN_CODEC || !AudioTranscoder.needsTranscode(codec)) return null
+
+        val source = localMuxUrl() ?: return null
+        return tc.playlistFor(channelId, source)
+    }
+
+    /**
+     * Sirve la lista que genera ffmpeg, reescribiendo los nombres de segmento a
+     * `/stream/aac/...` para que el navegador los pida por HTTP (en el fichero
+     * son rutas de disco locales).
+     */
+    private suspend fun respondTranscodedPlaylist(call: ApplicationCall, playlist: File) {
+        val session = RemoteAuth.sessionToken(call)
+        val text = runCatching { playlist.readText() }.getOrNull()
+        if (text.isNullOrBlank()) {
+            call.respond(HttpStatusCode.ServiceUnavailable)
+            return
+        }
+        val rewritten = text.lineSequence().joinToString("\n") { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) line
+            else {
+                val name = File(trimmed).name
+                val suffix = if (session.isNullOrBlank()) "" else "?s=" + java.net.URLEncoder.encode(session, "UTF-8")
+                "/stream/aac/$name$suffix"
+            }
+        }
+        call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+        call.respondText(rewritten, ContentType.parse("application/vnd.apple.mpegurl"))
+    }
+
+    /** ID del canal que suena ahora en el escritorio. */
+    private fun currentChannelId(): String? {
+        val url = controller?.currentUrl ?: return null
+        return appState.channels.firstOrNull { it.url == url }?.id
+    }
+
+    /**
+     * URL del mux local para que ffmpeg/ffprobe lean de aqui y no del panel.
+     * Lleva `nt=1` ("no transcode") para que esa peticion sirva el stream
+     * original: sin esa marca, el mux le devolveria a ffmpeg su propia salida y
+     * se quedaria dando vueltas sobre si mismo.
+     */
+    private fun localMuxUrl(): String? {
+        val ch = currentChannelId() ?: return null
+        return "http://127.0.0.1:$listeningPort/stream/current.m3u8" +
+            "?nt=1&ch=" + java.net.URLEncoder.encode(ch, "UTF-8") +
+            "&${LocalMuxKey.PARAM}=" + java.net.URLEncoder.encode(LocalMuxKey.value, "UTF-8")
+    }
+
+    /** Reglas minimas de usuario y contraseña; devuelve el codigo de error o null. */
+    private fun validateCredentials(username: String?, password: String?): String? = when {
+        username.isNullOrBlank() -> "username_required"
+        username.trim().length < 3 -> "username_too_short"
+        password.isNullOrEmpty() -> "password_required"
+        password.length < MIN_PASSWORD_LENGTH -> "weak_password"
+        else -> null
     }
 
     /** Canal vecino en el orden de la lista activa, con salto circular (±1). */
@@ -413,15 +699,16 @@ class RemoteWebServer(
         }
     }
 
-    private fun buildStateDto(bus: RemoteEventBus, role: RemoteRole): StateDto {
+    private fun buildStateDto(bus: RemoteEventBus, session: RemoteSession): StateDto {
         val now = bus.currentNowPlaying()
         // Un invitado solo ve el canal que ha puesto el administrador: no se le
         // manda la lista ni los grupos (ademas de no poder cambiar nada, no tiene
         // por que conocer el resto del catalogo).
-        if (!role.isAdmin) {
+        if (!session.isAdmin) {
             return StateDto(
                 playlistName = appState.selectedPlaylist?.name,
                 role = "viewer",
+                username = session.username,
                 nowPlaying = now,
             )
         }
@@ -462,6 +749,7 @@ class RemoteWebServer(
         return StateDto(
             playlistName = appState.selectedPlaylist?.name,
             role = "admin",
+            username = session.username,
             groups = groups,
             channels = channels,
             favoriteChannelIds = favIds,
@@ -470,6 +758,12 @@ class RemoteWebServer(
     }
 
     private companion object {
+        /** Minimo de la contraseña: corto pero no ridiculo, es una red domestica. */
+        const val MIN_PASSWORD_LENGTH = 6
+
+        /** Marca en la cache de codecs para "ffprobe no supo decirlo": no transcodificar. */
+        const val UNKNOWN_CODEC = "?"
+
         /** Manifest PWA-lite: permite "añadir a pantalla de inicio" con el icono y color de marca. */
         const val WEB_MANIFEST = """{
             "name": "IPTV Family",

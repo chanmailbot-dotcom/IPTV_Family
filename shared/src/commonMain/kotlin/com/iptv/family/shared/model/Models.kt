@@ -85,19 +85,54 @@ data class UserSettings(
     val autoPlayNext: Boolean = true,
     val enableWebServer: Boolean = false,
     val webServerPort: Int = 8080,
-    /** Token de ADMINISTRADOR: control total (cambiar canal, favoritos, volumen...). */
-    val webServerToken: String? = null,
     /**
-     * Token de INVITADO: solo ver lo que el administrador ha puesto. No puede
-     * cambiar de canal ni tocar el reproductor; si es null, no hay acceso de
-     * invitado y solo entra quien tenga el token de administrador.
+     * Cuentas de acceso a la web (usuario + contraseña). El administrador las
+     * gestiona desde Ajustes. Si esta vacia, la web pide crear la primera cuenta
+     * de administrador antes de dejar entrar a nadie.
      */
-    val webViewerToken: String? = null
+    val webUsers: List<WebUser> = emptyList(),
+    /**
+     * Convertir a AAC el audio que el navegador no puede reproducir (AC-3, MP2...)
+     * usando ffmpeg. Solo afecta a la web: el reproductor de escritorio decodifica
+     * esos formatos sin problema.
+     */
+    val transcodeAudioForWeb: Boolean = true,
+    /** Ruta a ffmpeg si no esta en el PATH; null = buscarlo automaticamente. */
+    val ffmpegPath: String? = null,
 )
 
 @Serializable
 enum class ThemeType {
     LIGHT, DARK, SYSTEM
+}
+
+/**
+ * Cuenta de acceso al servidor web.
+ *
+ * La contraseña NO se guarda: se guarda un hash PBKDF2 con su sal, para que un
+ * volcado de `settings.json` (que viaja en copias de seguridad y esta en texto
+ * plano en el disco) no revele las contraseñas de la familia.
+ */
+@Serializable
+data class WebUser(
+    val username: String,
+    /** Hash PBKDF2-HMAC-SHA256 en Base64. */
+    val passwordHash: String,
+    /** Sal en Base64, distinta por usuario. */
+    val salt: String,
+    /** Iteraciones usadas al calcular el hash (se guarda para poder subirlas luego). */
+    val iterations: Int = 120_000,
+    val role: WebRole = WebRole.VIEWER,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Serializable
+enum class WebRole {
+    /** Control total: cambiar canal, favoritos, reproductor y gestionar usuarios. */
+    ADMIN,
+
+    /** Solo ver lo que el administrador ha puesto. */
+    VIEWER,
 }
 
 @Serializable

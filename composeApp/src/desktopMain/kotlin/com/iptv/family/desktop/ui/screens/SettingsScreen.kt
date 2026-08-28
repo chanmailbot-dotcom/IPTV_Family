@@ -32,8 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import com.iptv.family.desktop.remote.AudioTranscoder
+import com.iptv.family.shared.data.auth.PasswordHasher
+import com.iptv.family.shared.model.WebRole
 import com.iptv.family.desktop.player.VlcNative
 import com.iptv.family.desktop.remote.RemoteAuth
 import com.iptv.family.desktop.state.AppState
@@ -148,22 +149,13 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
         }
 
         Section("Servidor web") {
-            val clipboard = LocalClipboardManager.current
             ToggleRow(
                 title = "Activar servidor web",
                 subtitle = "Permite ver y cambiar de canal desde el navegador de cualquier dispositivo " +
                     "de tu red (o de internet, exponiendo el puerto con algo como ngrok).",
                 checked = settings.enableWebServer,
             ) { enabled ->
-                scope.launch {
-                    if (enabled && settings.webServerToken.isNullOrBlank()) {
-                        appState.mutateSettings {
-                            copy(enableWebServer = true, webServerToken = RemoteAuth.generateToken())
-                        }
-                    } else {
-                        appState.mutateSettings { copy(enableWebServer = enabled) }
-                    }
-                }
+                scope.launch { appState.mutateSettings { copy(enableWebServer = enabled) } }
             }
 
             var portText by remember(settings.webServerPort) { mutableStateOf(settings.webServerPort.toString()) }
@@ -181,55 +173,56 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                 }) { Text("Guardar puerto") }
             }
 
-            if (settings.enableWebServer && !settings.webServerToken.isNullOrBlank()) {
-                // Las IPs de red no cambian mientras la pantalla esta abierta: enumerar
-                // las interfaces en cada recomposicion era trabajo de red por fotograma.
-                val lanIps = remember { localLanAddresses() }
+            if (settings.enableWebServer) {
+                WebUsersBlock(appState, scope)
 
-                AccessTokenBlock(
-                    title = "Administrador — control total",
-                    description = "Puede cambiar de canal, marcar favoritos y manejar el reproductor.",
-                    token = settings.webServerToken.orEmpty(),
-                    port = settings.webServerPort,
-                    lanIps = lanIps,
-                    clipboard = clipboard,
-                    onRegenerate = {
-                        scope.launch { appState.mutateSettings { copy(webServerToken = RemoteAuth.generateToken()) } }
-                    },
-                )
-
-                Spacer(Modifier.height(6.dp))
-
-                if (settings.webViewerToken.isNullOrBlank()) {
+                ToggleRow(
+                    title = "Convertir el audio para el navegador",
+                    subtitle = "Muchos canales emiten el audio en AC-3 o MP2, que ningun navegador " +
+                        "puede reproducir (en esta app si se oye). Con esto, ffmpeg lo convierte a AAC " +
+                        "al vuelo. Solo recodifica el audio: el video se copia tal cual.",
+                    checked = settings.transcodeAudioForWeb,
+                ) { enabled ->
+                    scope.launch { appState.mutateSettings { copy(transcodeAudioForWeb = enabled) } }
+                }
+                if (settings.transcodeAudioForWeb) {
+                    val ffmpegFound = remember { AudioTranscoder.resolveFfmpeg(settings.ffmpegPath) }
                     Text(
-                        "Acceso de invitado: solo ve el canal que tú pongas, sin poder cambiar nada.",
+                        if (ffmpegFound != null) "ffmpeg encontrado: $ffmpegFound"
+                        else "No se encuentra ffmpeg. Instalalo (winget install Gyan.FFmpeg) o indica su ruta abajo; " +
+                            "sin el, esos canales seguiran sin sonido en la web.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (ffmpegFound != null) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.error,
                     )
-                    Button(onClick = {
-                        scope.launch { appState.mutateSettings { copy(webViewerToken = RemoteAuth.generateToken()) } }
-                    }) { Text("Crear acceso de invitado") }
-                } else {
-                    AccessTokenBlock(
-                        title = "Invitado — solo ver",
-                        description = "Solo ve el canal que has puesto tú. No puede cambiar de canal " +
-                            "ni tocar el reproductor; tampoco recibe la lista de canales.",
-                        token = settings.webViewerToken.orEmpty(),
-                        port = settings.webServerPort,
-                        lanIps = lanIps,
-                        clipboard = clipboard,
-                        onRegenerate = {
-                            scope.launch { appState.mutateSettings { copy(webViewerToken = RemoteAuth.generateToken()) } }
-                        },
-                        onRevoke = {
-                            scope.launch { appState.mutateSettings { copy(webViewerToken = null) } }
-                        },
-                    )
+                    var ffmpegText by remember(settings.ffmpegPath) { mutableStateOf(settings.ffmpegPath.orEmpty()) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = ffmpegText,
+                            onValueChange = { ffmpegText = it },
+                            label = { Text("Ruta a ffmpeg (opcional)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(onClick = {
+                            scope.launch {
+                                appState.mutateSettings { copy(ffmpegPath = ffmpegText.trim().ifBlank { null }) }
+                            }
+                        }) { Text("Guardar") }
+                    }
                 }
 
+                val lanIps = remember { localLanAddresses() }
                 Text(
-                    "Para verlo fuera de casa, lanza ngrok apuntando a este puerto " +
-                        "(ngrok http ${settings.webServerPort}) y añade \"/?token=EL_TOKEN\" a la URL que te dé.",
+                    "Direcciones para abrir la web (cada persona entra con su usuario y contrasena):",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                lanIps.forEach { ip ->
+                    Text("http://$ip:${settings.webServerPort}", style = MaterialTheme.typography.bodyLarge)
+                }
+                Text(
+                    "Para verlo fuera de casa: ngrok http ${settings.webServerPort}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -281,57 +274,151 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
-
 /**
- * Bloque de un acceso web (administrador o invitado): el token, los enlaces
- * listos para abrir en el movil y las acciones de regenerar/revocar.
+ * Gestion de las cuentas de acceso a la web. El administrador crea usuarios,
+ * les cambia la contrasena o los borra; los invitados solo pueden ver el canal
+ * que el administrador haya puesto.
  */
 @Composable
-private fun AccessTokenBlock(
-    title: String,
-    description: String,
-    token: String,
-    port: Int,
-    lanIps: List<String>,
-    clipboard: androidx.compose.ui.platform.ClipboardManager,
-    onRegenerate: () -> Unit,
-    onRevoke: (() -> Unit)? = null,
-) {
+private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
+    val users = appState.settings.webUsers
+    var newName by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var newIsAdmin by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var changingFor by remember { mutableStateOf<String?>(null) }
+    var changePass by remember { mutableStateOf("") }
+
     Column(
         Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Text(
-            description,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text("Usuarios de la web", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(token, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            TextButton({ clipboard.setText(AnnotatedString(token)) }) { Text("Copiar") }
-            TextButton(onRegenerate) { Text("Regenerar") }
-            if (onRevoke != null) TextButton(onRevoke) { Text("Quitar") }
+        if (users.isEmpty()) {
+            Text(
+                "Todavia no hay ninguna cuenta. Crea la primera (sera administradora) aqui o " +
+                    "desde la propia web, que al abrirla sin cuentas pide crearla.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
+        users.forEach { user ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(user.username, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (user.role == WebRole.ADMIN) "Administrador — control total"
+                        else "Invitado — solo ve el canal que pongas tu",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton({ changingFor = user.username; changePass = "" }) { Text("Contrasena") }
+                // No se deja borrar al ultimo administrador: nadie podria volver a
+                // gestionar usuarios sin editar el fichero de ajustes a mano.
+                val isLastAdmin = user.role == WebRole.ADMIN && users.count { it.role == WebRole.ADMIN } <= 1
+                TextButton(
+                    enabled = !isLastAdmin,
+                    onClick = {
+                        scope.launch {
+                            appState.mutateSettings { copy(webUsers = webUsers.filterNot { it.username == user.username }) }
+                        }
+                        RemoteAuth.revokeSessionsOf(user.username)
+                        message = "Cuenta '${user.username}' eliminada."
+                    },
+                ) { Text("Borrar") }
+            }
+
+            if (changingFor == user.username) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = changePass,
+                        onValueChange = { changePass = it },
+                        label = { Text("Contrasena nueva") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        enabled = changePass.length >= MIN_PASSWORD_LEN,
+                        onClick = {
+                            val updated = PasswordHasher.withNewPassword(user, changePass)
+                            scope.launch {
+                                appState.mutateSettings {
+                                    copy(webUsers = webUsers.map { if (it.username == user.username) updated else it })
+                                }
+                            }
+                            // Cambiar la contrasena echa a quien siguiera con la vieja.
+                            RemoteAuth.revokeSessionsOf(user.username)
+                            changingFor = null
+                            message = "Contrasena de '${user.username}' cambiada."
+                        },
+                    ) { Text("Cambiar") }
+                    TextButton({ changingFor = null }) { Text("Cancelar") }
+                }
+            }
+        }
+
+        Text("Anadir cuenta", style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = newName,
+                onValueChange = { newName = it },
+                label = { Text("Usuario") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = newPass,
+                onValueChange = { newPass = it },
+                label = { Text("Contrasena") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = newIsAdmin, onCheckedChange = { newIsAdmin = it })
+            Text(
+                if (newIsAdmin) "Administrador" else "Invitado (solo ver)",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                enabled = newName.trim().length >= 3 && newPass.length >= MIN_PASSWORD_LEN,
+                onClick = {
+                    val name = newName.trim()
+                    if (users.any { it.username.equals(name, ignoreCase = true) }) {
+                        message = "Ya existe una cuenta con ese nombre."
+                        return@Button
+                    }
+                    val user = PasswordHasher.createUser(
+                        name, newPass, if (newIsAdmin) WebRole.ADMIN else WebRole.VIEWER,
+                    )
+                    scope.launch { appState.mutateSettings { copy(webUsers = webUsers + user) } }
+                    newName = ""; newPass = ""; newIsAdmin = false
+                    message = "Cuenta '$name' creada."
+                },
+            ) { Text("Crear") }
+        }
         Text(
-            "Enlace directo (entra sin teclear nada):",
+            "La contrasena debe tener al menos $MIN_PASSWORD_LEN caracteres. No se guarda tal cual: " +
+                "se guarda su hash, asi que no se puede recuperar (solo cambiar).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        lanIps.forEach { ip ->
-            val link = "http://$ip:$port/?token=$token"
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(link, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
-                TextButton({ clipboard.setText(AnnotatedString(link)) }) { Text("Copiar enlace") }
-            }
+        message?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
+
+private const val MIN_PASSWORD_LEN = 6
 
 private fun localLanAddresses(): List<String> = runCatching {
     NetworkInterface.getNetworkInterfaces().asSequence()
