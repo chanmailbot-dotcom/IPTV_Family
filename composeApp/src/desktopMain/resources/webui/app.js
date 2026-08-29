@@ -37,6 +37,7 @@ const state = {
   pendingPlay: false,   // play() bloqueado → mostrar big-play
   audioCheckTimer: null,
   audioPicked: false,   // ya se eligió pista de audio para el canal en curso
+  iosFullscreen: false, // iOS no expone document.fullscreenElement: hay que anotarlo
   sse: null,
   started: false,
 };
@@ -631,6 +632,62 @@ function renderAudioPicker() {
     + `${escapeHtml(audioLabel(t))}</button>`).join("");
 }
 
+/* ─── Pantalla completa ────────────────────────────────────────────────────
+   En el iPhone NO existe la API de pantalla completa para elementos: Safari
+   solo la ofrece sobre el propio <video>, y con nombre propio
+   (`webkitEnterFullscreen`). El codigo llamaba a `requestFullscreen()` a secas,
+   que alli no existe, asi que el boton no hacia absolutamente nada. */
+
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+const isFullscreen = () => Boolean(fsElement()) || state.iosFullscreen === true;
+
+function toggleFullscreen() {
+  const card = $("video-card");
+  const video = $("video");
+
+  // Se sale por donde se entro. Si estamos en el reproductor nativo de iOS hay
+  // que cerrarlo por el <video>: `document.exitFullscreen` no lo saca de ahi
+  // (y en el iPhone ni siquiera existe).
+  if (state.iosFullscreen) {
+    if (video.webkitExitFullscreen) video.webkitExitFullscreen();
+    state.iosFullscreen = false;
+    unlockOrientation();
+    syncFullscreenUi();
+    return;
+  }
+  if (fsElement()) {
+    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    unlockOrientation();
+    return;
+  }
+
+  const request = card.requestFullscreen || card.webkitRequestFullscreen;
+  if (request) {
+    Promise.resolve(request.call(card)).then(lockLandscape).catch(() => {});
+    return;
+  }
+  // iPhone: la unica via es el reproductor nativo sobre el <video>. Solo
+  // funciona si el video ya tiene datos cargados.
+  if (video.webkitEnterFullscreen) {
+    try { video.webkitEnterFullscreen(); } catch { /* sin metadatos todavia */ }
+  }
+}
+
+function syncFullscreenUi() {
+  $("video-card").classList.toggle("is-fullscreen", isFullscreen());
+  if (!isFullscreen()) unlockOrientation();
+}
+
+/** En vertical la tele se ve como una franja; en pantalla completa se pide
+ *  apaisado. No todos los navegadores lo permiten (iOS no), y no pasa nada. */
+function lockLandscape() {
+  try { screen.orientation?.lock?.("landscape")?.catch?.(() => {}); } catch {}
+}
+function unlockOrientation() {
+  try { screen.orientation?.unlock?.(); } catch {}
+}
+
 function teardownLocalVideo() {
   destroyHls();
   const video = $("video");
@@ -1093,14 +1150,12 @@ function wireControls() {
   });
 
   /* Pantalla completa */
-  $("btn-fs").addEventListener("click", () => {
-    const card = $("video-card");
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else (card.requestFullscreen ? card.requestFullscreen() : $("video-frame").requestFullscreen())?.catch?.(() => {});
-  });
-  document.addEventListener("fullscreenchange", () => {
-    $("video-card").classList.toggle("is-fullscreen", Boolean(document.fullscreenElement));
-  });
+  $("btn-fs").addEventListener("click", toggleFullscreen);
+  ["fullscreenchange", "webkitfullscreenchange"].forEach((ev) =>
+    document.addEventListener(ev, syncFullscreenUi));
+  // iOS avisa por el <video>, no por el documento.
+  $("video").addEventListener("webkitbeginfullscreen", () => { state.iosFullscreen = true; syncFullscreenUi(); });
+  $("video").addEventListener("webkitendfullscreen", () => { state.iosFullscreen = false; syncFullscreenUi(); });
 
   /* Overlays: reintentar y big-play */
   $("btn-retry").addEventListener("click", () => {
@@ -1152,7 +1207,7 @@ function wireControls() {
       case "f": $("btn-fs").click(); break;
       case "n": cmd("/api/player/next", {})(); break;
       case "p": cmd("/api/player/prev", {})(); break;
-      case "escape": if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); break;
+      case "escape": if (isFullscreen()) toggleFullscreen(); break;
     }
   });
 }

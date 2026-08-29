@@ -565,6 +565,15 @@ button { font: inherit; color: inherit; }
      tablets y ventanas pequeñas de portatil sufrian lo mismo. */
   .video-card { flex: none; }
   .video-frame { flex: none; aspect-ratio: 16 / 9; min-height: 0; }
+
+  /* En pantalla completa manda la pantalla, no la proporcion fija de arriba:
+     si no, el video se quedaba en una franja 16:9 con bandas alrededor. */
+  .video-card:fullscreen,
+  .video-card:-webkit-full-screen { flex: 1; }
+  .video-card:fullscreen .video-frame,
+  .video-card:-webkit-full-screen .video-frame {
+    flex: 1; aspect-ratio: auto; min-height: 0;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
