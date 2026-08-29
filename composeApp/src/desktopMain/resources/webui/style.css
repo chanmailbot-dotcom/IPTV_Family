@@ -557,14 +557,81 @@ button { font: inherit; color: inherit; }
   }
   .channel-list { max-height: 56vh; }
   .brand-sub { display: none; }
+
+  /* En cuanto la rejilla se apila, la columna del reproductor deja de tener
+     una altura que repartir: `flex: 1` se resolvia a CERO y el video quedaba
+     con 0-40 px de alto, con los mandos amontonados sobre la imagen. Va aqui
+     y no en el bloque de movil porque el apilado empieza ya en 1080 px:
+     tablets y ventanas pequeñas de portatil sufrian lo mismo. */
+  .video-card { flex: none; }
+  .video-frame { flex: none; aspect-ratio: 16 / 9; min-height: 0; }
 }
-@media (max-width: 640px) {
-  .topbar { padding: 0 12px; }
-  .search-box { display: none; }
-  .connection span:last-child { display: none; }
+
+/* ─────────────────────────────────────────────────────────────
+   Movil / pantallas estrechas
+   ─────────────────────────────────────────────────────────────
+   Medido en un viewport de 390 px: la pagina salia de 492 px de ancho, o sea
+   que TODO se veia desplazado y habia que arrastrar de lado para llegar a los
+   mandos. El culpable era la barra superior (sus acciones solas median 464 px)
+   y, ademas, el video se quedaba con 0 px de alto. */
+@media (max-width: 760px) {
+  /* La barra se reparte en dos filas: marca + acciones arriba, buscador
+     entero debajo. Antes iban las tres cosas en una sola fila. */
+  .topbar {
+    height: auto; min-height: 56px; flex-wrap: wrap;
+    align-items: center; gap: 8px; padding: 8px 12px;
+  }
+  .brand { flex: 1 1 auto; min-width: 0; gap: 8px; }
+  .brand-mark, .brand-mark svg { width: 28px; height: 28px; }
+  .brand-text strong { font-size: 14px; }
+
+  .top-actions { flex: 0 0 auto; gap: 6px; }
+  .icon-btn { width: 36px; height: 36px; }
+  .theme-opt { width: 28px; height: 28px; }
+  .theme-opt .ic { width: 15px; height: 15px; }
+  .connection { height: 32px; padding: 0 9px; }
+  .connection span:last-child { display: none; }  /* solo el punto de color */
+  /* El rol ya se nota de sobra (un invitado no ve ni la lista de canales) y
+     esta etiqueta se comia 150 px de una barra que no los tiene. */
+  .role-badge { display: none; }
+
+  /* El buscador VUELVE en movil. Estaba oculto por debajo de 640 px, que es
+     justo donde mas falta hace: con miles de canales es la unica forma
+     practica de encontrar uno. Ocupa su propia fila. */
+  .search-box {
+    display: flex; order: 10; flex: 1 0 100%;
+    max-width: none; margin: 0; height: 38px;
+  }
+
   .controls { gap: 8px; padding: 10px 12px; }
-  .volume-group { min-width: 120px; }
+  .ctrl-group { gap: 6px; }
+  .ctrl-btn { width: 40px; height: 40px; }   /* 40px sigue siendo buen objetivo tactil */
+  /* El volumen a su propia fila: en una sola no cabia y desbordaba. */
+  .volume-group { order: 10; flex: 1 0 100%; min-width: 0; }
   .big-play { width: 68px; height: 68px; }
+
+  /* La lista es donde se pasa el tiempo, pero al ser la columna de altura
+     automatica se quedaba en 120 px (dos canales y medio). El minimo la
+     obliga a ocupar algo util sin robarle sitio al reproductor. */
+  .channel-list { min-height: 46vh; max-height: 62vh; }
+  .cat-panel { max-height: 52vh; }
+  .channels-head { padding: 12px 14px 8px; }
+  .chips { padding: 0 12px 10px; }
+  .cat-bar { padding: 0 12px 10px; }
+
+  /* Objetivos tactiles: una fila de canal de 44 px minimo. */
+  .ch-row { padding: 9px; }
+  .ch-fav { width: 40px; height: 40px; }
+  .cat-item { padding: 11px 10px; }
+  .chip { padding: 8px 13px; }
+}
+
+/* Telefonos pequeños (iPhone SE y similares). */
+@media (max-width: 400px) {
+  .brand-text { display: none; }   /* con el icono basta; gana sitio la barra */
+  .top-actions { gap: 4px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .ctrl-btn { width: 38px; height: 38px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

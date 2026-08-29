@@ -794,7 +794,19 @@ function highlightActiveRow(id) {
 async function playChannel(id) {
   if (!isAdmin()) return; // el servidor responde 403; no intentarlo siquiera
   highlightActiveRow(id);
+  scrollPlayerIntoView();
   try { await apiPost("/api/channel/" + encodeURIComponent(id), "{}"); } catch {}
+}
+
+/**
+ * En movil el reproductor queda ENCIMA de la lista, asi que al elegir un canal
+ * te quedabas abajo mirando la lista sin ver lo que acababas de poner. En
+ * escritorio van uno al lado del otro y no hace falta tocar nada.
+ */
+function scrollPlayerIntoView() {
+  if (!window.matchMedia("(max-width: 760px)").matches) return;
+  const card = $("video-card");
+  if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function toggleFav(id, btn) {
