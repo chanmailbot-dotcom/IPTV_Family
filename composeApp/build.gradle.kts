@@ -71,7 +71,11 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
             )
             packageName = "IPTV Family"
-            packageVersion = "1.0.0"
+            // Windows Installer solo actualiza en sitio si la version SUBE. Con el
+            // mismo numero aborta con "Another version of this product is already
+            // installed" y hay que desinstalar a mano. Al publicar un instalador
+            // nuevo, subir esto.
+            packageVersion = "1.0.1"
             description = "Reproductor IPTV para Windows, Linux y macOS"
             vendor = "IPTV Family"
             appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
