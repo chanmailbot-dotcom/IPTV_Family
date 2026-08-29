@@ -162,6 +162,15 @@ button { font: inherit; color: inherit; }
   color: var(--text); font-size: 14px;
 }
 .search-box input::placeholder { color: var(--muted); }
+/* Borrar la busqueda de un toque: en el movil no hay una tecla comoda para
+   vaciar el campo y borrar letra a letra con 40.000 canales es un suplicio. */
+.search-clear {
+  flex: none; width: 28px; height: 28px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: var(--surface-3);
+  color: var(--text-soft); cursor: pointer;
+}
+.search-clear:hover { color: var(--text); }
+.search-clear .ic { width: 14px; height: 14px; }
 .search-box input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
 .top-actions { display: flex; align-items: center; gap: 10px; }
@@ -635,6 +644,59 @@ button { font: inherit; color: inherit; }
   .chip { padding: 8px 13px; }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Pestañas inferiores (solo movil)
+   ─────────────────────────────────────────────────────────────
+   En un telefono no caben reproductor y lista a la vez: al buscar un canal
+   solo se veian cuatro filas, con el video y los filtros comiendose la
+   pantalla. Se separan en dos secciones, como las apps de television. */
+.mtabs { display: none; }
+
+@media (max-width: 760px) {
+  .mtabs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    flex: none; padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+  }
+  .mtab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; min-height: 48px; padding: 6px 4px;
+    border: 0; border-radius: var(--r-md); background: transparent;
+    color: var(--muted); font-size: 11.5px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  .mtab .ic { width: 21px; height: 21px; }
+  .mtab[aria-current="true"] { background: var(--accent-soft); color: var(--accent); }
+
+  /* Cada pestaña enseña una sola cosa, a pantalla completa. */
+  body.tab-ver .channels-col { display: none; }
+  body.tab-canales .stage-col { display: none; }
+
+  /* Viendo: el reproductor manda, sin la lista debajo. */
+  body.tab-ver .layout { overflow-y: auto; }
+
+  /* Canales: la lista ocupa TODO lo que queda bajo la barra de busqueda.
+     Antes se quedaba en un recuadro de 388 px con el video encima. */
+  body.tab-canales .layout {
+    grid-template-rows: minmax(0, 1fr); padding: 10px 12px 8px;
+    height: auto; min-height: 0; overflow: hidden;
+  }
+  body.tab-canales .channels-col { min-height: 0; height: 100%; }
+  body.tab-canales .channel-list { min-height: 0; max-height: none; flex: 1; }
+  /* Los filtros se quedan fijos arriba mientras se recorre la lista. */
+  body.tab-canales .channels-head,
+  body.tab-canales .chips,
+  body.tab-canales .cat-bar { flex: none; }
+
+  /* Buscando por nombre, los filtros de tipo se comen 89 px de una pantalla
+     que no los tiene y casi nunca se usan a la vez que el texto. Se apartan
+     mientras hay busqueda y vuelven al borrarla. La categoria se queda: dice
+     dentro de que se esta buscando. */
+  body.tab-canales.searching .chips { display: none; }
+
+}
+
 /* Telefonos pequeños (iPhone SE y similares). */
 @media (max-width: 400px) {
   .brand-text { display: none; }   /* con el icono basta; gana sitio la barra */
@@ -692,6 +754,7 @@ button { font: inherit; color: inherit; }
    servidor además lo bloquea con 403; esto evita mostrar mandos inertes. */
 body.is-viewer .channels-col,
 body.is-viewer .search-box,
+body.is-viewer .mtabs,
 body.is-viewer #fav-filter { display: none; }
 body.is-viewer .layout { grid-template-columns: 1fr; }
 

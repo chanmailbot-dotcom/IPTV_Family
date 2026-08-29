@@ -63,7 +63,11 @@
 
       <div class="search-box">
         <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
-        <input id="search-input" type="search" placeholder="Buscar canales…  ( / )" autocomplete="off" spellcheck="false">
+        <input id="search-input" type="search" placeholder="Buscar canales…  ( / )" autocomplete="off"
+               autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+        <button type="button" id="search-clear" class="search-clear" aria-label="Borrar búsqueda" hidden>
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
       </div>
 
       <div class="top-actions">
@@ -219,6 +223,20 @@
         </div>
       </aside>
     </main>
+
+    <!-- Pestañas inferiores: SOLO en movil (el CSS las oculta en escritorio).
+         En una pantalla de telefono no caben reproductor y lista a la vez, asi
+         que se separan, como hacen las apps de television. -->
+    <nav id="mtabs" class="mtabs" aria-label="Secciones">
+      <button type="button" class="mtab" data-tab="ver" aria-current="true">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2.5"/><path d="M8 21h8"/><path d="M10 9l5 2-5 2z"/></svg>
+        <span>Viendo</span>
+      </button>
+      <button type="button" class="mtab" data-tab="canales" aria-current="false">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        <span>Canales</span>
+      </button>
+    </nav>
   </div>
 
   <!-- Gestión de usuarios (solo administrador) -->

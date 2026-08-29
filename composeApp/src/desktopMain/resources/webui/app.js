@@ -38,6 +38,8 @@ const state = {
   audioCheckTimer: null,
   audioPicked: false,   // ya se eligió pista de audio para el canal en curso
   iosFullscreen: false, // iOS no expone document.fullscreenElement: hay que anotarlo
+  searchText: new Map(),// id de canal → texto de busqueda ya normalizado
+  tab: "ver",           // pestaña de movil: "ver" | "canales"
   sse: null,
   started: false,
 };
@@ -166,6 +168,7 @@ function applyState(data) {
   state.now = data.nowPlaying || {};
   $("playlist-name").textContent = data.playlistName || "Sin lista";
   applyRole();
+  buildSearchIndex();
   renderKindChips();
   renderCategories();
   resetList();
@@ -707,20 +710,30 @@ const groupLabel = (id) => (id ? (state.groupNames.get(id) || id) : "");
 /** Los canales de TV no traen `kind` en el JSON porque "live" es el defecto. */
 const kindOf = (ch) => ch.kind || "live";
 
+/**
+ * Texto por el que se busca cada canal, ya en minusculas y SIN ACENTOS, para
+ * que "espana" encuentre "España" y "atres" encuentre "Atresmedia". Se calcula
+ * una sola vez al cargar la lista: hacerlo en cada pulsacion con 40.000 canales
+ * se notaria en un movil.
+ */
+function buildSearchIndex() {
+  state.searchText = new Map(
+    state.channels.map((ch) => [
+      ch.id,
+      fold(ch.name) + " " + fold(groupLabel(ch.group)) + " " + (ch.number ?? ""),
+    ])
+  );
+}
+
 function filteredChannels() {
-  const q = state.query.trim().toLowerCase();
+  const q = fold(state.query);
   return state.channels.filter((ch) => {
     if (state.onlyFavs && !state.favIds.has(ch.id)) return false;
     if (state.kind && kindOf(ch) !== state.kind) return false;
     if (state.group && ch.group !== state.group) return false;
-    if (q) {
-      // Buscar también por el nombre del grupo y por el número de dial, no por
-      // el id interno (que al usuario no le dice nada).
-      const hay = ch.name.toLowerCase().includes(q)
-        || groupLabel(ch.group).toLowerCase().includes(q)
-        || String(ch.number ?? "").includes(q);
-      if (!hay) return false;
-    }
+    // Busca por nombre, por categoria y por numero de dial; nunca por el id
+    // interno, que al usuario no le dice nada.
+    if (q && !(state.searchText.get(ch.id) || "").includes(q)) return false;
     return true;
   });
 }
@@ -851,19 +864,36 @@ function highlightActiveRow(id) {
 async function playChannel(id) {
   if (!isAdmin()) return; // el servidor responde 403; no intentarlo siquiera
   highlightActiveRow(id);
-  scrollPlayerIntoView();
+  goToPlayer();
   try { await apiPost("/api/channel/" + encodeURIComponent(id), "{}"); } catch {}
 }
 
-/**
- * En movil el reproductor queda ENCIMA de la lista, asi que al elegir un canal
- * te quedabas abajo mirando la lista sin ver lo que acababas de poner. En
- * escritorio van uno al lado del otro y no hace falta tocar nada.
- */
-function scrollPlayerIntoView() {
-  if (!window.matchMedia("(max-width: 760px)").matches) return;
-  const card = $("video-card");
-  if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+/* ─── Pestañas de movil ────────────────────────────────────────────────────
+   En un telefono no caben reproductor y lista a la vez: buscando un canal solo
+   se veian cuatro filas. Se separan en dos secciones y se cambia con la barra
+   inferior, como en las apps de television. En escritorio no existe: alli van
+   una al lado de la otra y la barra esta oculta por CSS. */
+
+const isMobileLayout = () => window.matchMedia("(max-width: 760px)").matches;
+
+function setTab(tab) {
+  state.tab = tab;
+  document.body.classList.toggle("tab-ver", tab === "ver");
+  document.body.classList.toggle("tab-canales", tab === "canales");
+  document.querySelectorAll(".mtab").forEach((b) =>
+    b.setAttribute("aria-current", String(b.dataset.tab === tab)));
+  // Al volver a la lista, el canal en curso a la vista.
+  if (tab === "canales") scrollActiveRowIntoView();
+}
+
+function scrollActiveRowIntoView() {
+  const row = document.querySelector(".ch-row.is-active");
+  if (row) row.scrollIntoView({ block: "center" });
+}
+
+/** Tras elegir canal en movil se pasa a verlo, que es lo que se acaba de pedir. */
+function goToPlayer() {
+  if (isMobileLayout()) setTab("ver");
 }
 
 async function toggleFav(id, btn) {
@@ -1018,11 +1048,35 @@ function wireControls() {
   document.querySelectorAll(".theme-opt").forEach((b) =>
     b.addEventListener("click", () => setTheme(b.dataset.themeOpt)));
 
+  /* Pestañas de móvil */
+  $("mtabs").addEventListener("click", (e) => {
+    const b = e.target.closest(".mtab");
+    if (b) setTab(b.dataset.tab);
+  });
+
   /* Búsqueda + filtro de favoritos */
-  $("search-input").addEventListener("input", debounce((e) => {
-    state.query = e.target.value;
+  const onSearch = debounce(() => {
+    state.query = $("search-input").value;
     resetList();
-  }, 180));
+  }, 180);
+  const reflectSearch = (value) => {
+    $("search-clear").hidden = value === "";
+    document.body.classList.toggle("searching", value !== "");
+  };
+  $("search-input").addEventListener("input", (e) => {
+    reflectSearch(e.target.value);
+    // Buscando se quiere ver la lista, no el vídeo: en móvil se salta sola.
+    if (e.target.value !== "" && isMobileLayout()) setTab("canales");
+    onSearch();
+  });
+  $("search-clear").addEventListener("click", () => {
+    const input = $("search-input");
+    input.value = "";
+    reflectSearch("");
+    state.query = "";
+    resetList();
+    input.focus();
+  });
   $("fav-filter").addEventListener("click", (e) => {
     state.onlyFavs = !state.onlyFavs;
     e.currentTarget.setAttribute("aria-pressed", String(state.onlyFavs));
@@ -1223,6 +1277,7 @@ function wireControls() {
   if (location.search) history.replaceState(null, "", location.pathname);
 
   wireControls();
+  setTab("ver"); // en escritorio las clases no hacen nada: la barra esta oculta
 
   // ¿Hay que crear la primera cuenta, o ya se puede iniciar sesion?
   let info = { needsSetup: false, session: null };

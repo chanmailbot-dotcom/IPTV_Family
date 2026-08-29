@@ -75,7 +75,7 @@ compose.desktop {
             // mismo numero aborta con "Another version of this product is already
             // installed" y hay que desinstalar a mano. Al publicar un instalador
             // nuevo, subir esto.
-            packageVersion = "1.0.1"
+            packageVersion = "1.0.2"
             description = "Reproductor IPTV para Windows, Linux y macOS"
             vendor = "IPTV Family"
             appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
