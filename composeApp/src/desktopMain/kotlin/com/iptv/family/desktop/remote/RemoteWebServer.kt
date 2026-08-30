@@ -134,6 +134,35 @@ class RemoteWebServer(
     private val throttle = LoginThrottle()
 
     /**
+     * Rechaza las peticiones que cambian algo si vienen de OTRA pagina.
+     *
+     * `SameSite=Lax` ya frena la mayoria, pero no es universal: navegadores
+     * viejos lo ignoran, y no cubre las peticiones que el propio sitio hace en
+     * segundo plano. Comprobar el origen es la segunda cerradura, y es barata:
+     * el navegador manda `Origin` en toda peticion POST y no deja que una pagina
+     * lo falsifique.
+     *
+     * Sin cabecera se deja pasar: la mandan los navegadores, no `curl` ni la app
+     * de escritorio, y bloquear ahi romperia el acceso desde herramientas
+     * legitimas sin ganar nada (una pagina maliciosa no puede omitirla).
+     */
+    private suspend fun PipelineContext<Unit, ApplicationCall>.requireSameOrigin(): Boolean {
+        val origin = call.request.headers[HttpHeaders.Origin] ?: return true
+        val host = call.request.headers[HttpHeaders.Host]
+        val esperado = runCatching { java.net.URI(origin).let { "${it.host}${if (it.port > 0) ":${it.port}" else ""}" } }
+            .getOrNull()
+        if (host != null && esperado != null && !host.equals(esperado, ignoreCase = true)) {
+            AppLog.w(
+                "RemoteServer",
+                "peticion rechazada: viene de '$origin' y este servidor es '$host'"
+            )
+            call.respond(HttpStatusCode.Forbidden, ErrorDto("origen_no_permitido"))
+            return false
+        }
+        return true
+    }
+
+    /**
      * Se cuenta por IP y por usuario a la vez: por IP para frenar a quien prueba
      * muchos usuarios desde un sitio, y por usuario para frenar a quien prueba el
      * mismo usuario desde muchos sitios.
@@ -750,6 +779,7 @@ class RemoteWebServer(
      * pausa, usuarios) pasa por aqui: un invitado ve, pero no toca.
      */
     private suspend fun PipelineContext<Unit, ApplicationCall>.requireAdmin(): Boolean {
+        if (!requireSameOrigin()) return false
         val session = sessionOf(call)
         if (session == null) {
             call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))

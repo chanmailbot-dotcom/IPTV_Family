@@ -59,6 +59,7 @@ import com.iptv.family.shared.log.AppLog
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.launch
 import java.io.File
+import com.iptv.family.desktop.security.DesktopVault
 
 private enum class Destination(val label: String, val icon: ImageVector) {
     HOME(AppStrings.Nav.HOME, Icons.Rounded.VideoLibrary),
@@ -93,7 +94,7 @@ private fun mainWindow() = application {
     val appState = remember {
         val dir = File(System.getProperty("user.home"), ".iptv-family").apply { mkdirs() }
         AppLog.init(File(dir, "logs"))
-        AppState(LibraryRepository(FileKeyValueStore(dir)))
+        AppState(LibraryRepository(FileKeyValueStore(dir), vault = DesktopVault.create()))
     }
     // Un unico reproductor por modo de video: crear uno por canal filtra memoria nativa.
     // Cambiar el modo en Ajustes obliga a construir otro, y a soltar el viejo.

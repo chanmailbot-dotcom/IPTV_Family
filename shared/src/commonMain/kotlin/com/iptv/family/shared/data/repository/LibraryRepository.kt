@@ -19,6 +19,9 @@ import java.net.URL
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
+import com.iptv.family.shared.data.store.SecretVault
+import com.iptv.family.shared.data.store.protectOrPlain
+import com.iptv.family.shared.data.store.revealOrPlain
 
 /**
  * Un paso de migracion de datos guardados.
@@ -42,6 +45,12 @@ class LibraryRepository(
      * añade aqui un paso y la version sube sola.
      */
     private val migrations: List<SchemaMigration> = DEFAULT_MIGRATIONS,
+    /**
+     * Protege la contraseña de Xtream en disco. La implementacion la pone cada
+     * plataforma (DPAPI en Windows, Keystore en Android); por defecto no cifra,
+     * y avisa en el log.
+     */
+    private val vault: SecretVault = SecretVault.NONE,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -149,11 +158,39 @@ class LibraryRepository(
 
     suspend fun loadPlaylists(): List<Playlist> = withContext(Dispatchers.IO) {
         migrateIfNeeded()
-        loadOrRecover<List<Playlist>>(Keys.PLAYLISTS) { emptyList() }
+        val guardadas = loadOrRecover<List<Playlist>>(Keys.PLAYLISTS) { emptyList() }
+
+        // Si alguna contraseña sigue en claro (instalacion anterior) y esta
+        // plataforma sabe cifrar, se reescribe AHORA. Esperar al proximo guardado
+        // no valdria: las listas solo se guardan al añadir o renombrar una, asi
+        // que quien ya tenia la suya se habria quedado en claro para siempre.
+        val hayEnClaro = guardadas.any {
+            !it.xtreamPass.isNullOrEmpty() && !it.xtreamPass!!.startsWith(SecretVault.PREFIX)
+        }
+        if (hayEnClaro && vault.protect("x") != null) {
+            AppLog.d("Library", "cifrando credenciales que estaban en claro")
+            runCatching {
+                store.write(
+                    Keys.PLAYLISTS,
+                    json.encodeToString(serializer<List<Playlist>>(), guardadas.map { pl ->
+                        pl.xtreamPass?.let { pl.copy(xtreamPass = vault.protectOrPlain(it)) } ?: pl
+                    })
+                )
+            }.onFailure { AppLog.e("Library", "no se pudieron cifrar las credenciales", it) }
+        }
+
+        // Lo guardado puede venir cifrado (lo normal) o en claro (de una
+        // instalacion anterior). `revealOrPlain` acepta las dos cosas, asi
+        // que la conversion no la nota nadie.
+        guardadas.map { pl -> pl.xtreamPass?.let { pl.copy(xtreamPass = vault.revealOrPlain(it)) } ?: pl }
     }
 
     suspend fun savePlaylists(playlists: List<Playlist>) = withContext(Dispatchers.IO) {
-        store.write(Keys.PLAYLISTS, json.encodeToString(serializer<List<Playlist>>(), playlists))
+        // La contraseña del panel no vuelve a disco en claro.
+        val protegidas = playlists.map { pl ->
+            pl.xtreamPass?.let { pl.copy(xtreamPass = vault.protectOrPlain(it)) } ?: pl
+        }
+        store.write(Keys.PLAYLISTS, json.encodeToString(serializer<List<Playlist>>(), protegidas))
     }
 
     suspend fun deletePlaylist(id: String): List<Playlist> = withContext(Dispatchers.IO) {
