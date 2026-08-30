@@ -102,7 +102,11 @@ fun PlayerScreen(
             // y no tiene por que identificarse contra si mismo (ver LocalMuxKey).
             // `nt=1` para que el mux le sirva el stream original y no la version
             // con el audio reconvertido, que es solo para navegadores.
-            return "http://127.0.0.1:${s.webServerPort}/stream/current.m3u8" +
+            // Con HTTPS activo el servidor abre ademas un conector plano en
+            // loopback (puerto+1) para los consumidores internos: VLC no sabe
+            // que hacer con un certificado autofirmado y abriria un dialogo.
+            val puerto = if (s.webServerHttps) s.webServerPort + 1 else s.webServerPort
+            return "http://127.0.0.1:$puerto/stream/current.m3u8" +
                 "?nt=1&${LocalMuxKey.PARAM}=${LocalMuxKey.value}"
         }
         controller.play(

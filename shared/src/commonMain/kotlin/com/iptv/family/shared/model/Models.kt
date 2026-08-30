@@ -100,6 +100,13 @@ data class UserSettings(
      * Dias que dura la sesion del navegador. Antes eran 30 fijos: demasiado para
      * un servidor que puede acabar expuesto a internet, y no configurable.
      */
+    /**
+     * Servir la web por HTTPS con un certificado autofirmado. Desactivado por
+     * defecto: en la red local HTTP basta y el aviso del navegador molesta. Si
+     * se va a exponer el puerto a internet, hay que activarlo -- sin TLS la
+     * contraseña viaja legible.
+     */
+    val webServerHttps: Boolean = false,
     val webSessionDays: Int = 7,
     val transcodeAudioForWeb: Boolean = true,
     /** Ruta a ffmpeg si no esta en el PATH; null = buscarlo automaticamente. */

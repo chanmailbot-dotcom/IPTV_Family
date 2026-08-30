@@ -19,7 +19,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.cio.CIO as ServerCIO
+import io.ktor.server.netty.Netty as ServerEngine
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.resources
@@ -54,6 +54,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.iptv.family.shared.model.CategoryType
 import io.ktor.server.plugins.origin
+import io.ktor.server.engine.applicationEngineEnvironment
+import io.ktor.server.engine.sslConnector
+import io.ktor.server.engine.connector
 
 /**
  * Parseo manual del body JSON: `receive<T>()` depende del plugin
@@ -100,6 +103,15 @@ class RemoteWebServer(
 
     /** Puerto en el que escucha, para poder apuntar ffmpeg al mux local. */
     private var listeningPort: Int = 0
+
+    /** true si esta sirviendo por HTTPS: lo necesita el mux local para su propia URL. */
+    private var usingHttps: Boolean = false
+
+    /**
+     * Puerto plano de loopback por el que leen VLC y ffmpeg. Coincide con el
+     * publico salvo con HTTPS activo, donde hace falta uno aparte sin TLS.
+     */
+    private var internalPort: Int = 0
 
     /**
      * Convierte a AAC el audio que el navegador no puede reproducir. Se crea solo
@@ -230,7 +242,19 @@ class RemoteWebServer(
             }
         }
 
-        engine = embeddedServer(ServerCIO, port = port) {
+        // HTTPS si esta activado. Sin TLS la contraseña del usuario viaja
+        // legible: en casa el riesgo es bajo, pero en cuanto alguien expone el
+        // puerto a internet es una contraseña regalada a quien mire el trafico.
+        val tls = if (appState.settings.webServerHttps) {
+            val dir = File(System.getProperty("user.home"), ".iptv-family")
+            WebServerTls.keyStore(dir, TLS_PASSWORD)
+        } else null
+        if (appState.settings.webServerHttps && tls == null) {
+            AppLog.w("RemoteServer", "HTTPS pedido pero no se pudo preparar el certificado; se sigue por HTTP")
+        }
+        usingHttps = tls != null
+
+        val modulo: io.ktor.server.application.Application.() -> Unit = {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
 
             // Cabeceras de seguridad. No habia ninguna, y publicada la aplicacion
@@ -736,7 +760,40 @@ class RemoteWebServer(
                     else streamProxy.proxySegment(call, url)
                 }
             }
+        }
+
+        engine = if (tls != null) {
+            val (ks, fichero) = tls
+            internalPort = port + 1
+            embeddedServer(ServerEngine, applicationEngineEnvironment {
+                sslConnector(
+                    keyStore = ks,
+                    keyAlias = "iptv-family",
+                    keyStorePassword = { TLS_PASSWORD.toCharArray() },
+                    privateKeyPassword = { TLS_PASSWORD.toCharArray() },
+                ) {
+                    this.port = port
+                    this.keyStorePath = fichero
+                }
+                // Conector plano SOLO en loopback, para VLC y ffmpeg.
+                //
+                // Los consumidores internos leen del mux por HTTP. Con un
+                // certificado autofirmado, VLC abriria un dialogo pidiendo
+                // confirmacion y ffmpeg fallaria: activar HTTPS habria roto la
+                // reproduccion en el propio escritorio. Este conector no sale de
+                // 127.0.0.1, asi que no expone nada a la red.
+                connector {
+                    this.host = "127.0.0.1"
+                    this.port = internalPort
+                }
+                module(modulo)
+            })
+        } else {
+            internalPort = port
+            embeddedServer(ServerEngine, port = port, module = modulo)
         }.start(wait = false)
+
+        AppLog.d("RemoteServer", "escuchando por ${if (usingHttps) "https" else "http"} en el puerto $port")
     }
 
     fun stop() {
@@ -887,7 +944,7 @@ class RemoteWebServer(
      */
     private fun localMuxUrl(): String? {
         val ch = currentChannelId() ?: return null
-        return "http://127.0.0.1:$listeningPort/stream/current.m3u8" +
+        return "http://127.0.0.1:$internalPort/stream/current.m3u8" +
             "?nt=1&ch=" + java.net.URLEncoder.encode(ch, "UTF-8") +
             "&${LocalMuxKey.PARAM}=" + java.net.URLEncoder.encode(LocalMuxKey.value, "UTF-8")
     }
@@ -984,6 +1041,13 @@ class RemoteWebServer(
     }
 
     private companion object {
+        /**
+         * Contraseña del almacen del certificado HTTPS. No es un secreto: el
+         * fichero esta en la carpeta del usuario y quien pueda leerlo puede leer
+         * tambien esta constante. El almacen la exige, nada mas.
+         */
+        const val TLS_PASSWORD = "iptv-family"
+
         /** Minimo de la contraseña: corto pero no ridiculo, es una red domestica. */
         const val MIN_PASSWORD_LENGTH = 6
 

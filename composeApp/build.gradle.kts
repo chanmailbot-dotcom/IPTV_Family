@@ -33,10 +33,18 @@ kotlin {
                 // motor CIO (puro JVM, sin dependencias nativas, arranque/parada baratos).
                 val ktorVersion = "2.3.12"
                 implementation("io.ktor:ktor-server-core:$ktorVersion")
-                implementation("io.ktor:ktor-server-cio:$ktorVersion")
+                // Netty y no CIO: CIO no soporta HTTPS ("CIO Engine does not
+                // currently support HTTPS"), y sin TLS la contraseña del usuario
+                // viaja legible en cuanto alguien expone el puerto a internet.
+                // Sigue siendo Java puro, sin dependencias nativas.
+                implementation("io.ktor:ktor-server-netty:$ktorVersion")
                 implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
                 // Comprime el JSON de estado (una lista de 40.000 canales son ~7 MB).
                 implementation("io.ktor:ktor-server-compression:$ktorVersion")
+                // Genera el certificado autofirmado cuando se activa HTTPS y no
+                // hay uno propio. Sin esto, activar TLS obligaria a pelearse con
+                // keytool en la linea de comandos.
+                implementation("io.ktor:ktor-network-tls-certificates:$ktorVersion")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
                 // Cliente HTTP para el proxy del stream hacia el proveedor.
                 implementation("io.ktor:ktor-client-core:$ktorVersion")
