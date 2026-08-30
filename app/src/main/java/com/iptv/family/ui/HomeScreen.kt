@@ -46,6 +46,13 @@ import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 
 @Composable
 fun HomeScreen(
@@ -207,6 +214,7 @@ private fun AddPlaylistDialog(
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
+    var showPass by remember { mutableStateOf(false) }
 
     val canSave = name.isNotBlank() && when (mode) {
         AddMode.URL_M3U -> url.isNotBlank()
@@ -235,8 +243,38 @@ private fun AddPlaylistDialog(
                     singleLine = true,
                 )
                 if (mode == AddMode.XTREAM) {
-                    OutlinedTextField(user, { user = it }, label = { Text("Usuario") }, singleLine = true)
-                    OutlinedTextField(pass, { pass = it }, label = { Text("Contraseña") }, singleLine = true)
+                    OutlinedTextField(
+                        user, { user = it },
+                        label = { Text("Usuario") },
+                        singleLine = true,
+                        // Sin esto el teclado propone y autocorrige el usuario del
+                        // panel, y ademas lo pone en mayuscula inicial.
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false,
+                            capitalization = KeyboardCapitalization.None,
+                        ),
+                    )
+                    // La contraseña iba como texto normal: en una tele, a la vista
+                    // de toda la habitacion mientras se teclea con el mando.
+                    OutlinedTextField(
+                        pass, { pass = it },
+                        label = { Text("Contraseña") },
+                        singleLine = true,
+                        visualTransformation = if (showPass) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            // Poder verla es necesario: escribir a ciegas con un
+                            // mando, tecla a tecla, es la mejor receta para un
+                            // error que luego no se sabe donde esta.
+                            IconButton({ showPass = !showPass }) {
+                                Icon(
+                                    if (showPass) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                    contentDescription = if (showPass) "Ocultar contraseña" else "Mostrar contraseña",
+                                )
+                            }
+                        },
+                    )
                 }
             }
         },
