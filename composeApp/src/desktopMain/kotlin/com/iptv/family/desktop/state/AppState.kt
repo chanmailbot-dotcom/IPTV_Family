@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.iptv.family.shared.data.repository.LibraryRepository
+import com.iptv.family.shared.util.textoAntiguedad
 import com.iptv.family.shared.data.store.KeyValueStore
 import com.iptv.family.shared.data.xmltv.CommonEpgCache
 import com.iptv.family.shared.log.AppLog
@@ -16,6 +17,8 @@ import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
 import com.iptv.family.shared.model.UserSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
@@ -44,6 +47,15 @@ class AppState(
     var isLoading by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Aviso de que el catalogo que se esta viendo es la copia guardada, porque
+     * no se pudo hablar con el proveedor. Enseñar una lista de hace dias como
+     * si fuera la de ahora es peor que un error: el usuario no entiende por que
+     * faltan canales ni por que alguno no abre.
+     */
+    var avisoSinConexion by mutableStateOf<String?>(null)
         private set
 
     /** Guia EPG de la playlist activa (XMLTV), cacheada en shared. */
@@ -225,17 +237,43 @@ class AppState(
     fun nextProgram(channel: Channel?): EPGProgram? =
         channel?.let { epgCache.nextFor(it.epgChannelId) }
 
+    /**
+     * Carga en marcha, para no repetirla. Al entrar en una seccion se dispara la
+     * carga de la lista activa desde mas de un sitio a la vez (el arranque y la
+     * propia pantalla), y sin este candado eso son dos descargas y dos parseos
+     * de decenas de miles de canales compitiendo -- ademas de dos escrituras
+     * simultaneas del catalogo en disco.
+     */
+    private val cargaLock = Mutex()
+    private var cargandoPlaylistId: String? = null
+
     private suspend fun loadChannels(playlist: Playlist) = withContext(Dispatchers.IO) {
-        isLoading = true
-        error = null
-        val result = repository.buildChannels(playlist)
-        applyResult(result)
-        isLoading = false
+        val yaEnMarcha = cargaLock.withLock {
+            if (cargandoPlaylistId == playlist.id) true else { cargandoPlaylistId = playlist.id; false }
+        }
+        if (yaEnMarcha) {
+            AppLog.d("AppState", "carga de '${playlist.name}' ya en marcha: no se repite")
+            return@withContext
+        }
+        try {
+            isLoading = true
+            error = null
+            val result = repository.buildChannels(playlist)
+            applyResult(result)
+        } finally {
+            isLoading = false
+            cargaLock.withLock { cargandoPlaylistId = null }
+        }
     }
 
     private fun applyResult(result: LibraryRepository.ChannelsResult) {
         when (result) {
             is LibraryRepository.ChannelsResult.Ok -> {
+                avisoSinConexion = result.guardadoEnMs?.let {
+                    "Sin conexión con el proveedor: se muestra la lista guardada " +
+                        "${textoAntiguedad(it)}."
+                }
+                error = null
                 AppLog.d("AppState", "applyResult: ${result.channels.size} canales cargados")
                 channels = result.channels.map { ch ->
                     if (isFavorite(ch.id)) ch.copy(isFavorite = true) else ch
@@ -244,6 +282,7 @@ class AppState(
                 normalizeCategories()
             }
             is LibraryRepository.ChannelsResult.Error -> {
+                avisoSinConexion = null
                 AppLog.w("AppState", "applyResult: ${result.message}")
                 error = result.message
                 channels = emptyList()

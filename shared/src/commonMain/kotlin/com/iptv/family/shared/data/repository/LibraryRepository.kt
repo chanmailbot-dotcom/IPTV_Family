@@ -12,6 +12,7 @@ import com.iptv.family.shared.model.SourceType
 import com.iptv.family.shared.model.UserSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import java.net.HttpURLConnection
@@ -66,6 +67,9 @@ class LibraryRepository(
 
     companion object {
         val DEFAULT_MIGRATIONS: List<SchemaMigration> = emptyList()
+
+        /** Marcador que sustituye a las credenciales en la copia del catalogo. */
+        private const val MARCA_SECRETO = "{{secreto:"
     }
 
     private object Keys {
@@ -196,6 +200,10 @@ class LibraryRepository(
     suspend fun deletePlaylist(id: String): List<Playlist> = withContext(Dispatchers.IO) {
         val remaining = loadPlaylists().filterNot { it.id == id }
         savePlaylists(remaining)
+        // Al borrar la lista se borra tambien su copia del catalogo: si no,
+        // quedarian en disco miles de canales de una lista que el usuario cree
+        // haber eliminado.
+        runCatching { store.delete(claveCatalogo(id)) }
         remaining
     }
 
@@ -282,13 +290,31 @@ class LibraryRepository(
             }
         }
         when (result) {
-            is ChannelsResult.Ok -> AppLog.d(
-                "Library",
-                "buildChannels: OK ${result.channels.size} canales, ${result.categories.size} categorías"
-            )
-            is ChannelsResult.Error -> AppLog.w("Library", "buildChannels: ERROR ${result.message}")
+            is ChannelsResult.Ok -> {
+                AppLog.d(
+                    "Library",
+                    "buildChannels: OK ${result.channels.size} canales, ${result.categories.size} categorías"
+                )
+                guardarCatalogo(playlist, result)
+                result
+            }
+            is ChannelsResult.Error -> {
+                AppLog.w("Library", "buildChannels: ERROR ${result.message}")
+                // Sin red (o con el panel caido) se tira de la ultima copia: es
+                // preferible una lista de ayer, avisando de que lo es, a una
+                // pantalla vacia con un mensaje de error.
+                val copia = recuperarCatalogo(playlist)
+                if (copia == null) {
+                    result
+                } else {
+                    AppLog.w(
+                        "Library",
+                        "buildChannels: se usa la copia guardada (${copia.channels.size} canales)",
+                    )
+                    copia
+                }
+            }
         }
-        result
     }
 
     /**
@@ -425,9 +451,99 @@ class LibraryRepository(
     sealed class ChannelsResult {
         data class Ok(
             val channels: List<Channel>,
-            val categories: List<Category>
+            val categories: List<Category>,
+            /**
+             * Cuando el catalogo viene de la copia guardada en disco, el
+             * instante en que se guardo. `null` = recien descargado.
+             *
+             * La UI lo necesita para avisar: enseñar una lista de hace una
+             * semana como si fuera la de ahora es peor que no enseñar nada,
+             * porque el usuario no entiende por que faltan canales.
+             */
+            val guardadoEnMs: Long? = null,
         ) : ChannelsResult()
 
         data class Error(val message: String) : ChannelsResult()
     }
+
+    // ---------------------------------------------------------------------
+    // Copia del catalogo en disco: sin ella, un corte de internet deja la
+    // aplicacion vacia aunque ayer funcionara, y cada arranque vuelve a
+    // descargar y reparsear decenas de miles de canales.
+    // ---------------------------------------------------------------------
+
+    @Serializable
+    private data class CatalogoGuardado(
+        val guardadoEnMs: Long,
+        val channels: List<Channel>,
+        val categories: List<Category>,
+    )
+
+    private fun claveCatalogo(playlistId: String) = "catalogo_$playlistId.json"
+
+    private fun guardarCatalogo(playlist: Playlist, result: ChannelsResult.Ok) {
+        runCatching {
+            val secretos = secretosDe(playlist)
+            val guardado = CatalogoGuardado(
+                guardadoEnMs = System.currentTimeMillis(),
+                channels = result.channels.map { it.copy(url = ocultarSecretos(it.url, secretos)) },
+                categories = result.categories,
+            )
+            store.write(claveCatalogo(playlist.id), json.encodeToString(guardado))
+        }.onFailure {
+            // Que no se pueda guardar la copia no es motivo para estropear una
+            // carga que ha ido bien: se pierde el modo sin conexion, nada mas.
+            AppLog.w("Library", "No se pudo guardar la copia del catálogo: ${it.message}")
+        }
+    }
+
+    private fun recuperarCatalogo(playlist: Playlist): ChannelsResult.Ok? {
+        val crudo = runCatching { store.read(claveCatalogo(playlist.id)) }.getOrNull() ?: return null
+        val guardado = runCatching { json.decodeFromString<CatalogoGuardado>(crudo) }.getOrElse {
+            AppLog.w("Library", "La copia del catálogo está ilegible: ${it.message}")
+            return null
+        }
+        val secretos = secretosDe(playlist)
+        return ChannelsResult.Ok(
+            channels = guardado.channels.map { it.copy(url = restaurarSecretos(it.url, secretos)) },
+            categories = guardado.categories,
+            guardadoEnMs = guardado.guardadoEnMs,
+        )
+    }
+
+    /**
+     * Credenciales que NO pueden acabar escritas en la copia del catalogo.
+     *
+     * En Xtream la direccion de cada canal lleva dentro el usuario y la
+     * contraseña (`.../live/usuario/clave/123.ts`), y muchas listas M3U son un
+     * `get.php?username=...&password=...`. Guardar decenas de miles de esas
+     * direcciones en claro dejaria la contraseña del proveedor por todo el
+     * disco y anularia el cifrado de credenciales.
+     *
+     * Se ignoran los valores muy cortos: sustituir una cadena de dos o tres
+     * caracteres destrozaria direcciones donde aparece por casualidad.
+     */
+    private fun secretosDe(playlist: Playlist): List<String> = buildList {
+        playlist.xtreamUser?.let { add(it) }
+        playlist.xtreamPass?.let { add(it) }
+        playlist.m3uUrl?.let { url ->
+            for (parametro in listOf("username", "password")) {
+                Regex("""[?&]$parametro=([^&#]+)""", RegexOption.IGNORE_CASE)
+                    .find(url)?.groupValues?.get(1)?.let { add(it) }
+            }
+        }
+    }.map { it.trim() }.filter { it.length >= 4 }.distinct()
+
+    private fun ocultarSecretos(url: String, secretos: List<String>): String {
+        var salida = url
+        secretos.forEachIndexed { i, secreto -> salida = salida.replace(secreto, "$MARCA_SECRETO$i}}") }
+        return salida
+    }
+
+    private fun restaurarSecretos(url: String, secretos: List<String>): String {
+        var salida = url
+        secretos.forEachIndexed { i, secreto -> salida = salida.replace("$MARCA_SECRETO$i}}", secreto) }
+        return salida
+    }
+
 }

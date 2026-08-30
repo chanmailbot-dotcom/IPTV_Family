@@ -165,6 +165,22 @@ fun ChannelsScreen(
         }
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
+            // La lista es la copia guardada: se dice donde se ve la lista, no en
+            // un log. Sin boton de reintentar porque desde el mando el gesto
+            // natural es volver a entrar en la lista, y ademas se reintenta solo
+            // al recargar la seccion.
+            appState.avisoSinConexion?.let { aviso ->
+                Text(
+                    aviso,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+
             if (showPreview) {
                 LivePreviewPanel(controller = previewController!!, channelName = (focusedChannel ?: list.firstOrNull())?.name)
             }

@@ -49,6 +49,7 @@ import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.FlowRow
@@ -177,6 +178,27 @@ fun ChannelsScreen(
         )
 
         Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            // La lista es la copia guardada: hay que decirlo donde se ve la lista,
+            // no en un log. Con un boton para reintentar, que es lo unico que se
+            // puede hacer al respecto.
+            appState.avisoSinConexion?.let { aviso ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.medium)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        aviso,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton({ scope.launch { appState.refresh() } }) { Text("Reintentar") }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
