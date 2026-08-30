@@ -97,10 +97,18 @@ class XmltvParser {
         // <!DOCTYPE tv SYSTEM "xmltv.dtd"> y con disallow-doctype-decl no se
         // podrian parsear. Se deja el DOCTYPE presente pero inerte: no se
         // cargan DTDs externos y no se resuelven entidades externas.
-        setFeature("http://xml.org/sax/features/external-general-entities", false)
-        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-        setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-        isXIncludeAware = false
+        //
+        // Cada propiedad va por separado y tolerando que no exista: NO todas las
+        // implementaciones las conocen. La de Apache no existe en Android, y
+        // pedirla tumbaba el parseo entero con SAXNotRecognizedException -- es
+        // decir, alli la guia no se cargaba NUNCA. La proteccion de verdad no
+        // depende de estas propiedades sino del resolvedor de entidades de mas
+        // abajo, que devuelve un documento vacio y no toca la red.
+        for (propiedad in FEATURES_XXE) {
+            runCatching { setFeature(propiedad, false) }
+                .onFailure { AppLog.d("EPG", "el parser XML de este sistema no conoce '$propiedad'") }
+        }
+        runCatching { isXIncludeAware = false }
         isNamespaceAware = false
     }.newSAXParser()
 
@@ -244,5 +252,12 @@ class XmltvParser {
          * red de seguridad para una guia rota o maliciosa.
          */
         const val MAX_PROGRAMMES = 300_000
+
+        /** Propiedades que apagan la resolucion de entidades externas, donde existan. */
+        private val FEATURES_XXE = listOf(
+            "http://xml.org/sax/features/external-general-entities",
+            "http://xml.org/sax/features/external-parameter-entities",
+            "http://apache.org/xml/features/nonvalidating/load-external-dtd",
+        )
     }
 }

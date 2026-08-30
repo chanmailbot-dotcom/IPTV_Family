@@ -73,6 +73,33 @@ class XmltvParserTest {
         assertEquals(1, result.size)
     }
 
+    /**
+     * Las guias reales traen `<!DOCTYPE tv SYSTEM "xmltv.dtd">`. Tiene que
+     * parsearse igual, y SIN ir a buscar el DTD: si el parser saliera a la red,
+     * una direccion inalcanzable dejaria la guia sin cargar (y una maliciosa
+     * convertiria abrir la app en una peticion a donde diga el fichero).
+     */
+    @Test
+    fun a_guide_with_a_doctype_parses_without_fetching_it() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE tv SYSTEM "http://192.0.2.1/xmltv.dtd">
+            <tv>
+              <programme start="20240101010000 +0000" stop="20240101020000 +0000" channel="A">
+                <title>Con DOCTYPE</title>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        // 192.0.2.0/24 es la red reservada para documentacion: no enruta a
+        // ningun sitio. Si el parser fuera a por el DTD, esto se quedaria
+        // colgado o fallaria en vez de devolver el programa.
+        val result = parser.parse(xml.byteInputStream())
+
+        assertEquals(1, result.size)
+        assertEquals("Con DOCTYPE", result[0].title)
+    }
+
     @Test
     fun parses_from_a_stream_without_loading_it_whole() {
         val result = parser.parse(sampleXml.byteInputStream())
