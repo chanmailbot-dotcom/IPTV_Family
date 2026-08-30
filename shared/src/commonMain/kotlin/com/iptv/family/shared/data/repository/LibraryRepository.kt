@@ -16,21 +16,99 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
+
+/**
+ * Un paso de migracion de datos guardados.
+ *
+ * @param from version DESDE la que migra. Aplicar la migracion deja los datos
+ *   en `from + 1`.
+ */
+class SchemaMigration(val from: Int, val descripcion: String, val apply: (KeyValueStore) -> Unit)
 
 /**
  * Orquesta el acceso a datos de la biblioteca (playlists, canales,
  * favoritos y ajustes) sobre un KeyValueStore. Compartido por desktop
  * y Android.
  */
-class LibraryRepository(private val store: KeyValueStore) {
+class LibraryRepository(
+    private val store: KeyValueStore,
+    /**
+     * Migraciones a aplicar, en orden. Se inyectan para poder probarlas; en
+     * produccion es la lista de abajo, hoy vacia porque el formato actual es el
+     * primero. Al cambiar el formato de `playlists.json` o `settings.json` se
+     * añade aqui un paso y la version sube sola.
+     */
+    private val migrations: List<SchemaMigration> = DEFAULT_MIGRATIONS,
+) {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val m3uParser = M3UParser()
+    private val migrationLock = Mutex()
+    private var migrated = false
 
-    private companion object {
-        const val KEY_PLAYLISTS = "playlists.json"
-        const val KEY_SETTINGS = "settings.json"
-        const val KEY_FAVORITES = "favorites.json"
+    /** Version a la que llegan los datos tras aplicar todas las migraciones. */
+    private val currentSchemaVersion: Int = (migrations.maxOfOrNull { it.from + 1 } ?: 1)
+
+    @Serializable
+    private data class SchemaInfo(val version: Int)
+
+    companion object {
+        val DEFAULT_MIGRATIONS: List<SchemaMigration> = emptyList()
+    }
+
+    private object Keys {
+        const val PLAYLISTS = "playlists.json"
+        const val SETTINGS = "settings.json"
+        const val FAVORITES = "favorites.json"
+        const val SCHEMA = "schema.json"
+    }
+
+    /**
+     * Lleva los datos guardados al formato actual antes de leerlos.
+     *
+     * Sin esto, el primer campo que se renombre o se quite rompe las
+     * instalaciones existentes, y con la aplicacion publicada eso ya no se
+     * arregla borrando un fichero a mano. Se llama sola desde cada lectura, para
+     * que ningun sitio pueda olvidarse.
+     */
+    suspend fun migrateIfNeeded() = migrationLock.withLock {
+        if (migrated) return@withLock
+        migrated = true
+
+        val instalacionNueva = store.read(Keys.SCHEMA) == null && store.read(Keys.PLAYLISTS) == null
+        val guardada = when {
+            // Instalacion limpia: nace ya en la version actual.
+            instalacionNueva -> currentSchemaVersion
+            // Datos anteriores a que existiera el sello: son la version 1.
+            store.read(Keys.SCHEMA) == null -> 1
+            else -> loadOrRecover<SchemaInfo>(Keys.SCHEMA) { SchemaInfo(1) }.version
+        }
+
+        if (guardada > currentSchemaVersion) {
+            // Datos escritos por una version mas nueva de la aplicacion. Tocarlos
+            // seria peor que no hacer nada.
+            AppLog.w(
+                "Library",
+                "los datos son de un formato mas nuevo (v$guardada > v$currentSchemaVersion); " +
+                    "se dejan como estan"
+            )
+            return@withLock
+        }
+
+        val pendientes = migrations.filter { it.from >= guardada }.sortedBy { it.from }
+        for (paso in pendientes) {
+            AppLog.d("Library", "migrando datos v${paso.from} -> v${paso.from + 1}: ${paso.descripcion}")
+            runCatching { paso.apply(store) }.onFailure {
+                AppLog.e("Library", "fallo migrando de v${paso.from}", it)
+                return@withLock // no se sella una version que no se alcanzo
+            }
+        }
+        if (guardada != currentSchemaVersion || store.read(Keys.SCHEMA) == null) {
+            store.write(Keys.SCHEMA, json.encodeToString(SchemaInfo.serializer(), SchemaInfo(currentSchemaVersion)))
+        }
     }
 
     /**
@@ -70,11 +148,12 @@ class LibraryRepository(private val store: KeyValueStore) {
     // ------------------------------------------------------------------
 
     suspend fun loadPlaylists(): List<Playlist> = withContext(Dispatchers.IO) {
-        loadOrRecover<List<Playlist>>(KEY_PLAYLISTS) { emptyList() }
+        migrateIfNeeded()
+        loadOrRecover<List<Playlist>>(Keys.PLAYLISTS) { emptyList() }
     }
 
     suspend fun savePlaylists(playlists: List<Playlist>) = withContext(Dispatchers.IO) {
-        store.write(KEY_PLAYLISTS, json.encodeToString(serializer<List<Playlist>>(), playlists))
+        store.write(Keys.PLAYLISTS, json.encodeToString(serializer<List<Playlist>>(), playlists))
     }
 
     suspend fun deletePlaylist(id: String): List<Playlist> = withContext(Dispatchers.IO) {
@@ -205,11 +284,12 @@ class LibraryRepository(private val store: KeyValueStore) {
     // ------------------------------------------------------------------
 
     suspend fun loadSettings(): UserSettings = withContext(Dispatchers.IO) {
-        loadOrRecover<UserSettings>(KEY_SETTINGS) { UserSettings() }
+        migrateIfNeeded()
+        loadOrRecover<UserSettings>(Keys.SETTINGS) { UserSettings() }
     }
 
     suspend fun saveSettings(settings: UserSettings) = withContext(Dispatchers.IO) {
-        store.write(KEY_SETTINGS, json.encodeToString(UserSettings.serializer(), settings))
+        store.write(Keys.SETTINGS, json.encodeToString(UserSettings.serializer(), settings))
     }
 
     // ------------------------------------------------------------------
@@ -217,7 +297,8 @@ class LibraryRepository(private val store: KeyValueStore) {
     // ------------------------------------------------------------------
 
     suspend fun loadFavorites(): List<FavoriteChannel> = withContext(Dispatchers.IO) {
-        loadOrRecover<List<FavoriteChannel>>(KEY_FAVORITES) { emptyList() }
+        migrateIfNeeded()
+        loadOrRecover<List<FavoriteChannel>>(Keys.FAVORITES) { emptyList() }
     }
 
     suspend fun toggleFavorite(channelId: String, playlistId: String, isFavorite: Boolean): List<FavoriteChannel>
@@ -230,7 +311,7 @@ class LibraryRepository(private val store: KeyValueStore) {
         } else if (!isFavorite) {
             favorites = favorites.filterNot { it.channelId == channelId && it.playlistId == playlistId }
         }
-        store.write(KEY_FAVORITES, json.encodeToString(serializer<List<FavoriteChannel>>(), favorites))
+        store.write(Keys.FAVORITES, json.encodeToString(serializer<List<FavoriteChannel>>(), favorites))
         favorites
     }
 
