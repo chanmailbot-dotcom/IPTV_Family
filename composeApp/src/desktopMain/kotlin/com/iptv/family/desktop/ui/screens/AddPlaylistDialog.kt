@@ -167,26 +167,27 @@ fun AddPlaylistDialog(
                     }
                 }
 
-                if (mode == AddMode.URL_M3U || mode == AddMode.XTREAM) {
+                // UN solo campo de guia, y solo donde tiene efecto. Antes habia dos
+                // ligados a la misma variable -- se escribia en uno y cambiaba el
+                // otro -- y ademas aparecia uno en modo Archivo, donde
+                // `onAddM3uFile` ni siquiera recibe la URL: lo que se escribiera
+                // alli se tiraba sin avisar.
+                if (mode != AddMode.FILE) {
+                    Spacer(Modifier.height(2.dp))
                     OutlinedTextField(
                         value = epgUrl,
                         onValueChange = { epgUrl = it },
-                        label = { Text("URL de la guía EPG (XMLTV) — opcional") },
-                        placeholder = { Text("http://…/xmltv.php?username=…&password=…") },
+                        label = { Text("Guía EPG (XMLTV) — opcional") },
+                        placeholder = {
+                            Text(
+                                if (mode == AddMode.XTREAM) "Déjalo vacío: se toma del propio panel"
+                                else "http://…/xmltv.php"
+                            )
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-
-                Spacer(Modifier.height(2.dp))
-                OutlinedTextField(
-                    value = epgUrl,
-                    onValueChange = { epgUrl = it },
-                    label = { Text("Guía EPG (opcional)") },
-                    placeholder = { Text("http://…/xmltv.php — déjalo vacío en Xtream") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 Text(
                     when (mode) {
                         AddMode.URL_M3U -> "La URL que te dio tu proveedor, normalmente acaba en .m3u o .m3u8."
