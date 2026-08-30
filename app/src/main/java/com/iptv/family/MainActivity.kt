@@ -175,6 +175,7 @@ class MainActivity : ComponentActivity() {
                                         PlayerScreen(
                                             controller = ctrl,
                                             channel = channel,
+                                            appState = appState,
                                             zapList = zapList,
                                             onSelectChannel = { ch -> preview(ch, zapList) },
                                             onBack = { destination = playerOrigin },

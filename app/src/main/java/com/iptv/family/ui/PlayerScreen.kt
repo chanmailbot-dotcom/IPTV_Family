@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import com.iptv.family.player.ExoPlayerController
+import com.iptv.family.state.AppState
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +64,13 @@ private const val ZAP_BAR_HIDE_DELAY_MS = 5000L
 private const val SEEK_BAR_HIDE_DELAY_MS = 2500L
 /** Salto por pulsacion de flecha. 10 s es lo que usan casi todos los reproductores de TV. */
 private const val SEEK_STEP_MS = 10_000L
+
+/** Hora local «21:45» de un instante, o null si la guia no lo declara. */
+private fun horaDe(ms: Long): String? {
+    if (ms <= 0L) return null
+    val hora = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+    return "%02d:%02d".format(hora.hour, hora.minute)
+}
 
 /** mm:ss, o h:mm:ss si la pelicula pasa de la hora. */
 private fun formatTime(ms: Long): String {
@@ -88,6 +96,12 @@ private fun List<Channel>.neighbourOf(current: Channel, delta: Int): Channel? {
 fun PlayerScreen(
     controller: ExoPlayerController,
     channel: Channel,
+    /**
+     * Para consultar la guia. La lista ya enseñaba «Ahora: …» y el reproductor
+     * no: al sacar los mandos no habia forma de saber que estabas viendo ni
+     * cuanto le quedaba, que es justo lo que se pregunta al zapear.
+     */
+    appState: AppState? = null,
     zapList: List<Channel> = emptyList(),
     onSelectChannel: (Channel) -> Unit = {},
     onBack: () -> Unit,
@@ -354,13 +368,32 @@ fun PlayerScreen(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    Text(
-                        channel.name,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            channel.name,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val epgTick = appState?.epgTick
+                        val programa = remember(channel.id, epgTick) { appState?.currentProgram(channel) }
+                        val siguiente = remember(channel.id, epgTick) { appState?.nextProgram(channel) }
+                        if (programa != null) {
+                            Text(
+                                buildString {
+                                    append(programa.title)
+                                    // La hora de fin importa mas que la de inicio:
+                                    // dice cuanto queda para el cambio.
+                                    horaDe(programa.endTime)?.let { append(" · hasta las $it") }
+                                    siguiente?.let { append(" · Luego: ${it.title}") }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     // Solo se ofrecen si hay algo que elegir: un boton que abre
                     // una lista con una sola entrada es ruido.
                     if (controller.audioTracks.size > 1) {
