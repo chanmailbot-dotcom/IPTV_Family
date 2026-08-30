@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Reglas de copia para Android 11 y anteriores (API < 31).
+
+    Hoy no llegan a aplicarse porque allowBackup="false" desactiva la copia. Se
+    dejan correctas por si alguien la reactiva.
+
+    Antes este fichero incluia sharedpref y database, mientras las reglas de
+    Android 12+ dejaban entrar ademas filesDir entero. Dos ficheros diciendo
+    cosas distintas es justo como se cuela una fuga sin que nadie lo note.
+-->
 <full-backup-content>
-    <include domain="sharedpref" path="."/>
-    <include domain="database" path="."/>
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
 </full-backup-content>

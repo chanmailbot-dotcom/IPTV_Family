@@ -18,8 +18,20 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <!--
+        allowBackup="false": la app guarda en `filesDir` las listas con el
+        usuario y la contraseña de Xtream en claro, los hashes de las cuentas del
+        servidor web y los registros. Con la copia activa, todo eso salia del
+        dispositivo hacia la nube de Google.
+
+        Las reglas no bastaban: en data_extraction_rules.xml la seccion
+        cloud-backup solo tenia un exclude de sharedpref, y sin ningun include
+        Android da por incluido todo lo demas. En Android 12+ ya se subia.
+
+        Lo que se pierde es poco: volver a añadir una lista es un minuto.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:banner="@mipmap/tv_banner"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
