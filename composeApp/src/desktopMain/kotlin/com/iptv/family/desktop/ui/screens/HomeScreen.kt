@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -63,23 +64,46 @@ fun HomeScreen(
 ) {
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
 
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val estrecha = maxWidth < ANCHO_COMPACTO
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+        // En una ventana estrecha, titulo y boton no caben en la misma linea: el
+        // boton se comia el texto y quedaban encima uno de otro. Ahi el boton
+        // baja a su propia fila, a lo ancho, en vez de encogerse hasta ser
+        // ilegible.
+        if (estrecha) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(AppStrings.Home.TITLE, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
                     AppStrings.Home.SUBTITLE,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Button(onAddClick, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(AppStrings.Home.ADD)
+                }
             }
-            Button(onAddClick) {
-                Icon(Icons.Rounded.Add, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(AppStrings.Home.ADD)
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(AppStrings.Home.TITLE, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        AppStrings.Home.SUBTITLE,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Button(onAddClick) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(AppStrings.Home.ADD)
+                }
             }
         }
 
@@ -116,9 +140,11 @@ fun HomeScreen(
                 onOpen = onOpenChannels,
                 onRefresh = { scope.launch { appState.refresh() } },
                 onDelete = { pendingDelete = playlist },
+                compacta = estrecha,
             )
         }
     }
+    } // BoxWithConstraints
 
     pendingDelete?.let { playlist ->
         AlertDialog(
@@ -138,6 +164,8 @@ fun HomeScreen(
 
 @Composable
 private fun PlaylistCard(
+    /** Ventana estrecha: los botones con texto no caben sin comerse el nombre. */
+    compacta: Boolean = false,
     playlist: Playlist,
     isSelected: Boolean,
     channelCount: Int?,
@@ -206,10 +234,23 @@ private fun PlaylistCard(
         if (isLoading) {
             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         } else if (isSelected) {
-            Button(onOpen) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(4.dp))
-                Text(AppStrings.Home.VIEW_CHANNELS)
+            // En estrecho el boton con texto se comia el nombre de la lista
+            // (quedaba en «Prue») y ademas se solapaba con el. La tarjeta entera
+            // ya abre la lista al pulsarla, asi que aqui basta el icono.
+            if (compacta) {
+                IconButton(onOpen) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        contentDescription = AppStrings.Home.VIEW_CHANNELS,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            } else {
+                Button(onOpen) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text(AppStrings.Home.VIEW_CHANNELS)
+                }
             }
             IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, contentDescription = AppStrings.Home.REFRESH) }
         }
@@ -261,3 +302,6 @@ private val SourceType.readableName: String
         SourceType.M3U_FILE -> "Archivo M3U local"
         SourceType.XTREAM -> "Xtream Codes"
     }
+
+/** Por debajo de este ancho, los botones con texto dejan de caber en la fila. */
+private val ANCHO_COMPACTO = 760.dp

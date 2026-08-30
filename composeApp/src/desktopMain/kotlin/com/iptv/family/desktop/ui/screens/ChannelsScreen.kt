@@ -13,18 +13,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
@@ -166,18 +172,40 @@ fun ChannelsScreen(
         }
     }
 
+    // La ventana estrecha reventaba la pantalla: el panel de categorias se
+    // quedaba con sus 250 dp pasara lo que pasara, y lo que se encogia era la
+    // lista. A 700 px los nombres de canal quedaban en «C» y «Ca»; a 560, el
+    // texto «Buscar canal…» se escribia EN VERTICAL, una letra por linea, y no
+    // se veia ni un canal. Por debajo del umbral, las categorias dejan de ser
+    // una columna fija y pasan a un desplegable encima de la lista.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val estrecha = maxWidth < ANCHO_MINIMO_PARA_COLUMNA
+    val seleccionar: (Category) -> Unit = { category ->
+        if (isAdult(category.name) && category.id !in unlocked) pendingPin = category
+        else selectedCategory = category.id
+    }
+
     Row(Modifier.fillMaxSize()) {
-        CategorySidebar(
-            categories = visibleCategories,
-            selectedId = selectedCategory,
-            isLocked = { category -> isAdult(category.name) && category.id !in unlocked },
-            onSelect = { category ->
-                if (isAdult(category.name) && category.id !in unlocked) pendingPin = category
-                else selectedCategory = category.id
-            },
-        )
+        if (!estrecha) {
+            CategorySidebar(
+                categories = visibleCategories,
+                selectedId = selectedCategory,
+                isLocked = { category -> isAdult(category.name) && category.id !in unlocked },
+                onSelect = seleccionar,
+            )
+        }
 
         Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            if (estrecha) {
+                CategoryDropdown(
+                    categories = visibleCategories,
+                    selectedId = selectedCategory,
+                    isLocked = { category -> isAdult(category.name) && category.id !in unlocked },
+                    onSelect = seleccionar,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
             // La lista es la copia guardada: hay que decirlo donde se ve la lista,
             // no en un log. Con un boton para reintentar, que es lo unico que se
             // puede hacer al respecto.
@@ -275,6 +303,7 @@ fun ChannelsScreen(
             }
         }
     }
+    } // BoxWithConstraints
 
     openSeries?.let { series ->
         EpisodesDialog(
@@ -366,6 +395,85 @@ private fun EpisodesDialog(
         },
         confirmButton = { TextButton(onDismiss) { Text("Cerrar") } },
     )
+}
+
+/**
+ * Las categorias cuando no cabe la columna: un desplegable encima de la lista.
+ *
+ * Se enseña cuantos canales tiene cada una, igual que en la columna, porque es
+ * lo que permite decidir sin entrar a mirar.
+ */
+@Composable
+private fun CategoryDropdown(
+    categories: List<Category>,
+    selectedId: String,
+    isLocked: (Category) -> Boolean,
+    onSelect: (Category) -> Unit,
+) {
+    var abierto by remember { mutableStateOf(false) }
+    val actual = categories.firstOrNull { it.id == selectedId }
+
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium)
+                .pointerHoverIcon(PointerIcon.Hand)
+                .clickable { abierto = true }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                actual?.name ?: "Todas",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "${actual?.channels?.size ?: 0}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Elegir categoría")
+        }
+
+        DropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
+            categories.forEach { category ->
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (isLocked(category)) {
+                                Icon(
+                                    Icons.Rounded.Lock,
+                                    contentDescription = "Bloqueada",
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                            Text(
+                                category.name,
+                                fontWeight = if (category.id == selectedId) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 320.dp),
+                            )
+                            Text(
+                                "${category.channels.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    onClick = { abierto = false; onSelect(category) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -468,3 +576,10 @@ private fun PinDialog(expectedPin: String?, onDismiss: () -> Unit, onUnlocked: (
         dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
     )
 }
+
+/**
+ * Por debajo de este ancho, la columna de categorias deja sitio a la lista y se
+ * convierte en un desplegable. 820 dp es donde la lista deja de tener espacio
+ * para un nombre de canal completo con la columna puesta.
+ */
+private val ANCHO_MINIMO_PARA_COLUMNA = 820.dp
