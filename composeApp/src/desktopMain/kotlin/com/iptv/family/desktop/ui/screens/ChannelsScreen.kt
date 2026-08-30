@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import com.iptv.family.shared.domain.ParentalControl
 
 private enum class TypeFilter(val label: String, val type: CategoryType?) {
     ALL("Todo", null),
@@ -77,9 +78,9 @@ fun ChannelsScreen(
     /** Serie cuyos episodios se estan mostrando, si hay alguna. */
     var openSeries by remember { mutableStateOf<Channel?>(null) }
 
-    fun isAdult(name: String): Boolean =
-        appState.settings.isParentalLockEnabled &&
-            appState.settings.adultCategoryNames.any { name.contains(it, ignoreCase = true) }
+    // La regla vive en `shared`: escritorio y Android tienen que bloquear
+    // exactamente lo mismo. Estaba escrita solo aqui, y Android no filtraba nada.
+    fun isAdult(name: String): Boolean = ParentalControl.isAdultCategory(name, appState.settings)
 
     // En M3U el grupo del canal ES el nombre de la categoria, pero en Xtream es un id
     // numerico. Sin traducir id -> nombre, el control parental no filtraria nada en Xtream.
@@ -438,7 +439,7 @@ private fun PinDialog(expectedPin: String?, onDismiss: () -> Unit, onUnlocked: (
             }
         },
         confirmButton = {
-            Button({ if (pin == expectedPin && !expectedPin.isNullOrBlank()) onUnlocked() else wrong = true }) {
+            Button({ if (ParentalControl.checkPin(pin, expectedPin)) onUnlocked() else wrong = true }) {
                 Text("Desbloquear")
             }
         },

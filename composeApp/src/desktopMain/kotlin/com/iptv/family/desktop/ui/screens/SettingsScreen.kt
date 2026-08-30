@@ -43,6 +43,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import com.iptv.family.shared.domain.ParentalControl
 
 @Composable
 fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
@@ -123,21 +124,39 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                 scope.launch { appState.mutateSettings { copy(isParentalLockEnabled = enabled) } }
             }
 
-            var pin by remember(settings.parentalPin) { mutableStateOf(settings.parentalPin.orEmpty()) }
+            // El campo arranca VACIO: el PIN ya no se guarda en claro, asi que
+            // precargarlo mostraria el hash. Se escribe uno nuevo o no se toca.
+            var pin by remember { mutableStateOf("") }
+            val pinValido = pin.length in ParentalControl.MIN_PIN_LENGTH..ParentalControl.MAX_PIN_LENGTH
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = pin,
-                    onValueChange = { if (it.length <= 6 && it.all(Char::isDigit)) pin = it },
-                    label = { Text("PIN (hasta 6 dígitos)") },
+                    onValueChange = { if (it.length <= ParentalControl.MAX_PIN_LENGTH && it.all(Char::isDigit)) pin = it },
+                    label = {
+                        Text(
+                            if (settings.parentalPin.isNullOrBlank()) "PIN nuevo (${ParentalControl.MIN_PIN_LENGTH}-${ParentalControl.MAX_PIN_LENGTH} dígitos)"
+                            else "Cambiar PIN (déjalo vacío para no tocarlo)"
+                        )
+                    },
                     singleLine = true,
                     enabled = settings.isParentalLockEnabled,
                     visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.width(260.dp),
+                    modifier = Modifier.width(300.dp),
                 )
                 Button(
-                    onClick = { scope.launch { appState.mutateSettings { copy(parentalPin = pin.ifBlank { null }) } } },
-                    enabled = settings.isParentalLockEnabled,
+                    onClick = {
+                        scope.launch {
+                            appState.mutateSettings { copy(parentalPin = ParentalControl.hashPin(pin)) }
+                        }
+                        pin = ""
+                    },
+                    enabled = settings.isParentalLockEnabled && pinValido,
                 ) { Text("Guardar PIN") }
+                if (!settings.parentalPin.isNullOrBlank()) {
+                    TextButton(
+                        onClick = { scope.launch { appState.mutateSettings { copy(parentalPin = null) } } },
+                    ) { Text("Quitar") }
+                }
             }
             if (settings.isParentalLockEnabled && settings.parentalPin.isNullOrBlank()) {
                 Text(

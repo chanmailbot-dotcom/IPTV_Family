@@ -59,6 +59,13 @@ import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.iptv.family.shared.domain.ParentalControl
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.rounded.Lock
 
 /**
  * null = pantalla de Favoritos (todos los tipos, filtrados por favorito).
@@ -79,6 +86,10 @@ fun ChannelsScreen(
     restoreFocusChannelId: String? = null,
 ) {
     var activeCategory by remember(mediaType) { mutableStateOf("all") }
+    /** Categorias desbloqueadas en esta sesion: el PIN se pide una vez, no en cada clic. */
+    var unlocked by remember { mutableStateOf(setOf<String>()) }
+    /** Categoria esperando PIN, si hay alguna. */
+    var pendingPin by remember { mutableStateOf<com.iptv.family.shared.model.Category?>(null) }
     var search by remember { mutableStateOf("") }
     var focusedChannel by remember { mutableStateOf<Channel?>(null) }
     val listState = rememberLazyListState()
@@ -90,10 +101,25 @@ fun ChannelsScreen(
     val categoriesForType = remember(appState.categories, mediaType) {
         if (mediaType == null) emptyList() else appState.categories.filter { it.type == mediaType || it.id == "all" }
     }
-    val list = remember(byType, activeCategory, search) {
+    // Control parental. Sin esto el ajuste solo movia un interruptor: ni ocultaba
+    // categorias ni pedia PIN. La regla vive en `shared` para que escritorio y
+    // Android bloqueen exactamente lo mismo.
+    val nombrePorCategoria = remember(appState.categories) {
+        appState.categories.associate { it.id to it.name }
+    }
+    fun esAdulto(groupId: String?): Boolean = ParentalControl.isAdultCategory(
+        // En Xtream `group` es un id numerico; hay que traducirlo a nombre o no
+        // se reconoceria ninguna categoria.
+        nombrePorCategoria[groupId] ?: groupId, appState.settings,
+    )
+
+    val list = remember(byType, activeCategory, search, unlocked, appState.settings) {
         byType.filter { ch ->
             (activeCategory == "all" || ch.group == activeCategory) &&
-                (search.isBlank() || ch.name.contains(search, ignoreCase = true))
+                (search.isBlank() || ch.name.contains(search, ignoreCase = true)) &&
+                // Un canal de una categoria bloqueada no aparece ni en «Todas»
+                // ni en las busquedas mientras no se desbloquee.
+                !(esAdulto(ch.group) && ch.group !in unlocked)
         }
     }
 
@@ -128,7 +154,11 @@ fun ChannelsScreen(
                 )
                 LazyColumn {
                     items(categoriesForType, key = { it.id }) { category ->
-                        CategoryRow(category, category.id == activeCategory) { activeCategory = category.id }
+                        val bloqueada = ParentalControl.isAdultCategory(category.name, appState.settings) &&
+                            category.id !in unlocked
+                        CategoryRow(category, category.id == activeCategory, bloqueada) {
+                            if (bloqueada) pendingPin = category else activeCategory = category.id
+                        }
                     }
                 }
             }
@@ -170,7 +200,20 @@ fun ChannelsScreen(
                     }
                 }
 
-                openSeries?.let { series ->
+                pendingPin?.let { categoria ->
+        UnlockPinDialog(
+            categoryName = categoria.name,
+            expectedPin = appState.settings.parentalPin,
+            onDismiss = { pendingPin = null },
+            onUnlocked = {
+                unlocked = unlocked + categoria.id
+                activeCategory = categoria.id
+                pendingPin = null
+            },
+        )
+    }
+
+    openSeries?.let { series ->
                     EpisodesDialog(
                         seriesName = series.name,
                         appState = appState,
@@ -274,7 +317,7 @@ private fun LivePreviewPanel(controller: ExoPlayerController, channelName: Strin
 }
 
 @Composable
-private fun CategoryRow(category: Category, selected: Boolean, onClick: () -> Unit) {
+private fun CategoryRow(category: Category, selected: Boolean, locked: Boolean, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -282,7 +325,19 @@ private fun CategoryRow(category: Category, selected: Boolean, onClick: () -> Un
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
             .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        // El candado hace visible que la categoria existe pero pide PIN. Sin el,
+        // pulsar y que no pase nada parece que la aplicacion esta rota.
+        if (locked) {
+            Icon(
+                Icons.Rounded.Lock,
+                contentDescription = "Bloqueada",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(6.dp))
+        }
         Text(category.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -403,4 +458,66 @@ private fun PosterCard(channel: Channel, onClick: () -> Unit, onToggleFavorite: 
             modifier = Modifier.padding(top = 6.dp),
         )
     }
+}
+
+/**
+ * Pide el PIN para abrir una categoria bloqueada.
+ *
+ * Si no hay PIN definido se dice claramente en vez de dejar al usuario probando
+ * combinaciones: con el control activado y sin PIN, la categoria no se puede
+ * abrir de ninguna manera.
+ */
+@Composable
+private fun UnlockPinDialog(
+    categoryName: String,
+    expectedPin: String?,
+    onDismiss: () -> Unit,
+    onUnlocked: () -> Unit,
+) {
+    var pin by remember { mutableStateOf("") }
+    var fallo by remember { mutableStateOf(false) }
+    val sinPin = expectedPin.isNullOrBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Control parental") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (sinPin) {
+                    Text("«$categoryName» está bloqueada y todavía no hay ningún PIN definido.")
+                    Text(
+                        "Ve a Ajustes → Control parental para definirlo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text("Introduce el PIN para abrir «$categoryName».")
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { if (it.length <= ParentalControl.MAX_PIN_LENGTH) { pin = it; fallo = false } },
+                        label = { Text("PIN") },
+                        singleLine = true,
+                        isError = fallo,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    )
+                    if (fallo) {
+                        Text(
+                            "PIN incorrecto.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!sinPin) {
+                Button(onClick = {
+                    if (ParentalControl.checkPin(pin, expectedPin)) onUnlocked() else fallo = true
+                }) { Text("Desbloquear") }
+            }
+        },
+        dismissButton = { TextButton(onDismiss) { Text(if (sinPin) "Entendido" else "Cancelar") } },
+    )
 }
