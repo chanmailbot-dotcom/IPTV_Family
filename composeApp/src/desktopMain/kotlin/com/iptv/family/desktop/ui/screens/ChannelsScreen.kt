@@ -51,6 +51,8 @@ import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 private enum class TypeFilter(val label: String, val type: CategoryType?) {
     ALL("Todo", null),
@@ -59,6 +61,7 @@ private enum class TypeFilter(val label: String, val type: CategoryType?) {
     SERIES("Series", CategoryType.SERIES),
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChannelsScreen(
     appState: AppState,
@@ -189,12 +192,20 @@ fun ChannelsScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow y no Row: en una ventana estrecha, una fila normal recorta lo
+            // que no cabe y desaparecian «Películas» y «Series» sin dejar rastro
+            // -- ni scroll, ni indicio de que hubiera mas filtros. Envolviendo,
+            // caben siempre, en una o en dos lineas.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 TypeFilter.entries.forEach { filter ->
                     FilterChip(
                         selected = typeFilter == filter,
                         onClick = { typeFilter = filter },
-                        label = { Text(filter.label) },
+                        label = { Text(filter.label, maxLines = 1) },
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
                     )
                 }
