@@ -185,7 +185,22 @@ fun ChannelsScreen(
                 LivePreviewPanel(controller = previewController!!, channelName = (focusedChannel ?: list.firstOrNull())?.name)
             }
 
-            if (list.isEmpty()) {
+            // "Cargando" y "vacio" NO son lo mismo, y aqui se enseñaban igual:
+            // mientras se descargaba la lista (que con un proveedor lento son
+            // varios segundos, y hasta 15 si acaba en tiempo agotado) la pantalla
+            // decia «No hay elementos en esta categoría». O sea, se afirmaba que
+            // no hay nada cuando todavia no se sabe.
+            if (appState.isLoading && appState.channels.isEmpty()) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator()
+                        Text("Cargando canales…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else if (list.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
                         if (mediaType == null) "Aún no tienes canales favoritos. Márcalos con la estrella (mantén pulsado)."
