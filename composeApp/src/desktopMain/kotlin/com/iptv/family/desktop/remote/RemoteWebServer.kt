@@ -53,6 +53,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.iptv.family.shared.model.CategoryType
+import io.ktor.server.plugins.origin
 
 /**
  * Parseo manual del body JSON: `receive<T>()` depende del plugin
@@ -129,6 +130,45 @@ class RemoteWebServer(
 
     private fun users(): List<WebUser> = appState.settings.webUsers
 
+    /** Freno progresivo a los intentos fallidos de acceso. Ver [LoginThrottle]. */
+    private val throttle = LoginThrottle()
+
+    /**
+     * Se cuenta por IP y por usuario a la vez: por IP para frenar a quien prueba
+     * muchos usuarios desde un sitio, y por usuario para frenar a quien prueba el
+     * mismo usuario desde muchos sitios.
+     */
+    private fun clavesDeFreno(call: ApplicationCall, username: String?): Array<String> {
+        val ip = call.request.local.remoteHost
+        val user = username?.trim()?.lowercase().orEmpty()
+        return if (user.isEmpty()) arrayOf("ip:$ip") else arrayOf("ip:$ip", "usuario:$user")
+    }
+
+    /**
+     * Cookie de sesion endurecida.
+     *
+     * - `SameSite=Lax`: sin esto el navegador la mandaba en peticiones nacidas en
+     *   OTRA pagina, que es lo que permite que un sitio cualquiera dispare
+     *   acciones en tu servidor con tu sesion (CSRF).
+     * - `Secure` solo bajo HTTPS: marcarla siempre romperia el acceso normal por
+     *   HTTP en la red local, donde no hay certificado.
+     * - Duracion configurable en vez de 30 dias fijos.
+     */
+    private fun sessionCookie(call: ApplicationCall, token: String): Cookie {
+        val porHttps = call.request.origin.scheme == "https" ||
+            call.request.headers["X-Forwarded-Proto"].equals("https", ignoreCase = true)
+        val dias = appState.settings.webSessionDays.coerceIn(1, 365)
+        return Cookie(
+            name = RemoteAuth.SESSION_COOKIE,
+            value = token,
+            path = "/",
+            maxAge = dias * 24 * 60 * 60,
+            httpOnly = true,
+            secure = porHttps,
+            extensions = mapOf("SameSite" to "Lax"),
+        )
+    }
+
     fun start(port: Int) {
         if (engine != null) return
         AppLog.d("RemoteServer", "start: puerto=$port")
@@ -163,6 +203,38 @@ class RemoteWebServer(
 
         engine = embeddedServer(ServerCIO, port = port) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+
+            // Cabeceras de seguridad. No habia ninguna, y publicada la aplicacion
+            // habra quien la exponga a internet.
+            intercept(ApplicationCallPipeline.Plugins) {
+                with(call.response) {
+                    // Nada de esta web debe cargarse dentro de un iframe ajeno: es
+                    // lo que permite el "clickjacking" (superponer algo invisible
+                    // sobre tus botones para que pulses sin saberlo).
+                    header("X-Frame-Options", "DENY")
+                    // Que el navegador no adivine el tipo de un fichero: adivinar
+                    // convierte un texto subido en script ejecutable.
+                    header("X-Content-Type-Options", "nosniff")
+                    // No filtrar la direccion del servidor (que puede llevar
+                    // puerto y host internos) a sitios de terceros.
+                    header("Referrer-Policy", "no-referrer")
+                    // La interfaz es toda local: no necesita cargar nada de fuera.
+                    // 'unsafe-inline' sigue haciendo falta para los estilos del
+                    // propio HTML; blob: y data: los usa hls.js para el video.
+                    header(
+                        "Content-Security-Policy",
+                        "default-src 'self'; " +
+                            "img-src 'self' data: https: http:; " +
+                            "media-src 'self' blob:; " +
+                            "script-src 'self'; " +
+                            "style-src 'self' 'unsafe-inline'; " +
+                            "connect-src 'self'; " +
+                            "frame-ancestors 'none'; " +
+                            "base-uri 'none'; " +
+                            "form-action 'self'",
+                    )
+                }
+            }
 
             // El estado con una lista de 40.000 canales son ~7 MB de JSON: por
             // ngrok o por 4G eso es inaceptable, y comprimido baja a una fraccion.
@@ -246,6 +318,16 @@ class RemoteWebServer(
                  * crea el administrador ya identificado (ver /api/users).
                  */
                 post("/api/setup") {
+                    // Mismo freno que en /login: crear la primera cuenta tambien es
+                    // una puerta, y se puede aporrear igual.
+                    run {
+                        val espera = throttle.esperaPendiente("setup")
+                        if (espera > 0) {
+                            call.response.header(HttpHeaders.RetryAfter, ((espera + 999) / 1000).toString())
+                            call.respond(HttpStatusCode.TooManyRequests, ErrorDto("demasiados_intentos"))
+                            return@post
+                        }
+                    }
                     if (users().isNotEmpty()) {
                         call.respond(HttpStatusCode.Conflict, mapOf("error" to "already_configured"))
                         return@post
@@ -266,26 +348,32 @@ class RemoteWebServer(
                 }
 
                 post("/login") {
-                    // receiveJson (receiveText + Json): responde siempre, nunca deja
-                    // la conexion a medias ante un cuerpo invalido.
+                    // Freno a la fuerza bruta: sin esto, una contraseña de seis
+                    // caracteres se prueba entera en minutos si alguien expone el
+                    // puerto a internet.
                     val req = call.receiveJson<LoginRequest>()
+                    val claves = clavesDeFreno(call, req?.username)
+                    val espera = throttle.esperaPendiente(*claves)
+                    if (espera > 0) {
+                        call.response.header(HttpHeaders.RetryAfter, ((espera + 999) / 1000).toString())
+                        call.respond(HttpStatusCode.TooManyRequests, ErrorDto("demasiados_intentos"))
+                        return@post
+                    }
+
                     val session = req?.let { RemoteAuth.login(users(), it.username, it.password) }
                     if (session == null) {
+                        val siguiente = throttle.fallo(*claves)
                         AppLog.w("RemoteServer", "login fallido para '${req?.username}'")
+                        if (siguiente > 0) {
+                            call.response.header(HttpHeaders.RetryAfter, ((siguiente + 999) / 1000).toString())
+                        }
                         // Mismo mensaje si el usuario no existe o la contraseña falla:
                         // no se confirma que cuentas existen.
                         call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "invalid_credentials"))
                         return@post
                     }
-                    call.response.cookies.append(
-                        Cookie(
-                            name = RemoteAuth.SESSION_COOKIE,
-                            value = session.token,
-                            path = "/",
-                            maxAge = 60 * 60 * 24 * 30,
-                            httpOnly = true,
-                        )
-                    )
+                    throttle.acierto(*claves)
+                    call.response.cookies.append(sessionCookie(call, session.token))
                     AppLog.d("RemoteServer", "login de '${session.username}' (${session.role})")
                     call.respond(
                         LoginResponseDto(

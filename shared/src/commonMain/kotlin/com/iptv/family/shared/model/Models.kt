@@ -96,6 +96,11 @@ data class UserSettings(
      * usando ffmpeg. Solo afecta a la web: el reproductor de escritorio decodifica
      * esos formatos sin problema.
      */
+    /**
+     * Dias que dura la sesion del navegador. Antes eran 30 fijos: demasiado para
+     * un servidor que puede acabar expuesto a internet, y no configurable.
+     */
+    val webSessionDays: Int = 7,
     val transcodeAudioForWeb: Boolean = true,
     /** Ruta a ffmpeg si no esta en el PATH; null = buscarlo automaticamente. */
     val ffmpegPath: String? = null,
