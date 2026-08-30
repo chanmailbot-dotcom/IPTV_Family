@@ -33,17 +33,44 @@ class LibraryRepository(private val store: KeyValueStore) {
         const val KEY_FAVORITES = "favorites.json"
     }
 
+    /**
+     * Lee y deserializa, y si el contenido esta corrupto INTENTA RECUPERARLO en
+     * vez de devolver el valor por defecto en silencio.
+     *
+     * Antes, un JSON truncado se convertia en lista vacia sin decir nada, y el
+     * siguiente guardado lo sobrescribia: adios listas y credenciales. Ahora:
+     *   1. si el fichero no parsea, se prueba con la copia de la escritura anterior;
+     *   2. si esa vale, se restaura y se sigue como si nada;
+     *   3. si tampoco, el fichero ilegible se aparta (no se pisa) y queda en el log.
+     */
+    private inline fun <reified T> loadOrRecover(key: String, defecto: () -> T): T {
+        val raw = store.read(key) ?: return defecto()
+
+        runCatching { json.decodeFromString<T>(raw) }
+            .onSuccess { return it }
+            .onFailure { AppLog.e("Library", "'$key' no se puede leer: ${it.message}") }
+
+        val copia = store.readBackup(key)
+        if (copia != null) {
+            runCatching { json.decodeFromString<T>(copia) }.onSuccess {
+                AppLog.w("Library", "'$key' recuperado desde la copia anterior")
+                runCatching { store.write(key, copia) }
+                return it
+            }
+        }
+
+        // Sin copia utilizable: se aparta para que el proximo guardado no lo pise.
+        store.quarantine(key)
+        AppLog.e("Library", "'$key' se ha perdido; se arranca con los valores por defecto")
+        return defecto()
+    }
+
     // ------------------------------------------------------------------
     // Playlists
     // ------------------------------------------------------------------
 
     suspend fun loadPlaylists(): List<Playlist> = withContext(Dispatchers.IO) {
-        val raw = store.read(KEY_PLAYLISTS) ?: return@withContext emptyList()
-        try {
-            json.decodeFromString<List<Playlist>>(raw)
-        } catch (e: Exception) {
-            emptyList()
-        }
+        loadOrRecover<List<Playlist>>(KEY_PLAYLISTS) { emptyList() }
     }
 
     suspend fun savePlaylists(playlists: List<Playlist>) = withContext(Dispatchers.IO) {
@@ -178,12 +205,7 @@ class LibraryRepository(private val store: KeyValueStore) {
     // ------------------------------------------------------------------
 
     suspend fun loadSettings(): UserSettings = withContext(Dispatchers.IO) {
-        val raw = store.read(KEY_SETTINGS) ?: return@withContext UserSettings()
-        try {
-            json.decodeFromString<UserSettings>(raw)
-        } catch (e: Exception) {
-            UserSettings()
-        }
+        loadOrRecover<UserSettings>(KEY_SETTINGS) { UserSettings() }
     }
 
     suspend fun saveSettings(settings: UserSettings) = withContext(Dispatchers.IO) {
@@ -195,12 +217,7 @@ class LibraryRepository(private val store: KeyValueStore) {
     // ------------------------------------------------------------------
 
     suspend fun loadFavorites(): List<FavoriteChannel> = withContext(Dispatchers.IO) {
-        val raw = store.read(KEY_FAVORITES) ?: return@withContext emptyList()
-        try {
-            json.decodeFromString<List<FavoriteChannel>>(raw)
-        } catch (e: Exception) {
-            emptyList()
-        }
+        loadOrRecover<List<FavoriteChannel>>(KEY_FAVORITES) { emptyList() }
     }
 
     suspend fun toggleFavorite(channelId: String, playlistId: String, isFavorite: Boolean): List<FavoriteChannel>
