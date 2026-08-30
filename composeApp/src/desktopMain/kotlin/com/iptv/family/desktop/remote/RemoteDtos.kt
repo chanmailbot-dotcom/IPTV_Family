@@ -3,6 +3,7 @@ package com.iptv.family.desktop.remote
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import com.iptv.family.shared.model.CategoryType
 
 /** DTOs de transporte HTTP del servidor remoto: no son modelo de dominio, viven aqui y no en `shared`. */
 
@@ -17,6 +18,12 @@ data class NowPlayingDto(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val error: String? = null,
+    /**
+     * Tipo de lo que suena ("live", "vod" o "series"). La web mostraba la
+     * insignia "En vivo" sobre cualquier cosa que estuviera reproduciendose,
+     * peliculas incluidas, porque no tenia forma de distinguirlo.
+     */
+    val kind: String = KIND_LIVE,
     val volume: Int = 0,
     val isMuted: Boolean = false,
     val epgNow: String? = null,
@@ -56,6 +63,13 @@ data class ChannelDto(
 const val KIND_LIVE = "live"
 const val KIND_VOD = "vod"
 const val KIND_SERIES = "series"
+
+/** Traduce el tipo de categoria del dominio al codigo corto que usa la web. */
+fun kindOf(type: CategoryType): String = when (type) {
+    CategoryType.LIVE -> KIND_LIVE
+    CategoryType.VOD -> KIND_VOD
+    CategoryType.SERIES -> KIND_SERIES
+}
 
 /** Grupo con su nombre ya legible, su tipo y cuantos canales tiene. */
 @Serializable

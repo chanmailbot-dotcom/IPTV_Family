@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import com.iptv.family.shared.model.CategoryType
 
 sealed interface RemoteEvent {
     data class NowPlaying(val dto: NowPlayingDto) : RemoteEvent
@@ -38,7 +39,18 @@ class RemoteEventBus(
                 lastNowPlaying = now
                 events.emit(RemoteEvent.NowPlaying(now))
             }
-            val signature = appState.channels.size * 31 + appState.categories.size
+            // La firma incluye la LISTA ACTIVA, no solo los conteos: dos listas
+            // distintas con el mismo numero de canales y categorias daban la
+            // misma firma y la web nunca se enteraba del cambio. Se añade
+            // ademas el primer y ultimo id, que cambian aunque los totales
+            // coincidan (por ejemplo al refrescar y variar el orden).
+            val signature = listOf(
+                appState.selectedPlaylistId,
+                appState.channels.size,
+                appState.categories.size,
+                appState.channels.firstOrNull()?.id,
+                appState.channels.lastOrNull()?.id,
+            ).joinToString("|").hashCode()
             if (signature != lastChannelsSignature) {
                 lastChannelsSignature = signature
                 events.emit(RemoteEvent.ChannelsChanged)
@@ -65,6 +77,7 @@ class RemoteEventBus(
             isPlaying = controller?.isPlaying ?: false,
             isBuffering = controller?.isBuffering ?: false,
             error = controller?.error,
+            kind = kindOf(channel?.categoryType ?: CategoryType.LIVE),
             volume = controller?.volume ?: 0,
             isMuted = controller?.isMuted ?: false,
             epgNow = current?.title,

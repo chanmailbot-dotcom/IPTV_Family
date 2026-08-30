@@ -52,14 +52,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import com.iptv.family.shared.model.CategoryType
-
-/** Traduce el tipo de categoria del dominio al codigo corto que usa la web. */
-private fun kindOf(type: CategoryType): String = when (type) {
-    CategoryType.LIVE -> KIND_LIVE
-    CategoryType.VOD -> KIND_VOD
-    CategoryType.SERIES -> KIND_SERIES
-}
 
 /**
  * Parseo manual del body JSON: `receive<T>()` depende del plugin

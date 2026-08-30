@@ -54,10 +54,15 @@ import kotlinx.coroutines.delay
 private const val CONTROLS_HIDE_DELAY_MS = 4000L
 private const val ZAP_BAR_HIDE_DELAY_MS = 5000L
 
+/**
+ * Vecino en la lista de zapeo, DANDO LA VUELTA en los extremos, igual que en
+ * escritorio y en la web. Antes se paraba en el primer y ultimo canal.
+ */
 private fun List<Channel>.neighbourOf(current: Channel, delta: Int): Channel? {
+    if (isEmpty()) return null
     val index = indexOfFirst { it.id == current.id }
     if (index < 0) return null
-    return getOrNull(index + delta)
+    return this[(index + delta).mod(size)]
 }
 
 @Composable

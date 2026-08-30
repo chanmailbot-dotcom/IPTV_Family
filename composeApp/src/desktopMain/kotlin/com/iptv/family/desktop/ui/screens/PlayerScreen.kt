@@ -180,10 +180,19 @@ fun PlayerScreen(
 private const val SURFACE_POLL_MS = 50L
 private const val SURFACE_TIMEOUT_MS = 5_000L
 
+/**
+ * Vecino en la lista de zapeo, DANDO LA VUELTA en los extremos.
+ *
+ * Antes estos botones se paraban en el primer y ultimo canal mientras el
+ * teclado (Main.kt) y la web si daban la vuelta: el mismo gesto hacia dos cosas
+ * distintas segun por donde se pidiera. Circular es ademas lo que hace
+ * cualquier television.
+ */
 private fun List<Channel>.neighbourOf(current: Channel, delta: Int): Channel? {
+    if (isEmpty()) return null
     val index = indexOfFirst { it.id == current.id }
     if (index < 0) return null
-    return getOrNull(index + delta)
+    return this[(index + delta).mod(size)]
 }
 
 @Composable

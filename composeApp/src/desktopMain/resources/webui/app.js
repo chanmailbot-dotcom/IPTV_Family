@@ -293,7 +293,10 @@ function applyNowPlaying(np) {
     if (np.logoUrl) { logo.src = np.logoUrl; logo.hidden = false; logo.onerror = () => { logo.hidden = true; }; }
     else logo.hidden = true;
   }
-  $("live-badge").hidden = !(np?.isPlaying && !np?.error);
+  // "En vivo" solo en directo. Antes se mostraba sobre cualquier cosa que
+  // estuviera reproduciendose, peliculas y episodios incluidos.
+  const enDirecto = (np?.kind || "live") === "live";
+  $("live-badge").hidden = !(np?.isPlaying && !np?.error && enDirecto);
 
   if (np?.error) $("error-msg").textContent = np.error;
   renderOverlays();
@@ -1161,6 +1164,10 @@ function wireControls() {
   });
   list.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
+    // El corazon de favoritos vive DENTRO de la fila, asi que pulsar Enter
+    // sobre el marcaba el favorito y ademas cambiaba de canal. El boton se
+    // encarga solo; aqui no hay nada que hacer.
+    if (e.target.closest(".ch-fav")) return;
     const row = e.target.closest(".ch-row");
     if (row) { e.preventDefault(); playChannel(row.dataset.id); }
   });
