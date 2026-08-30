@@ -40,6 +40,7 @@ const state = {
   iosFullscreen: false, // iOS no expone document.fullscreenElement: hay que anotarlo
   searchText: new Map(),// id de canal → texto de busqueda ya normalizado
   tab: "ver",           // pestaña de movil: "ver" | "canales"
+  episodes: [],         // episodios de la serie desplegada, si hay alguna
   sse: null,
   started: false,
 };
@@ -866,6 +867,54 @@ function highlightActiveRow(id) {
 
 async function playChannel(id) {
   if (!isAdmin()) return; // el servidor responde 403; no intentarlo siquiera
+
+  // Una serie no es reproducible: `get_series` devuelve el contenedor, no un
+  // flujo. Se despliegan sus episodios, que si lo son. El servidor rechaza
+  // igualmente el intento, pero asi no se pierde el viaje.
+  const ch = state.channels.find((c) => c.id === id);
+  if (ch && kindOf(ch) === "series") { openSeries(ch); return; }
+
+  highlightActiveRow(id);
+  goToPlayer();
+  try { await apiPost("/api/channel/" + encodeURIComponent(id), "{}"); } catch {}
+}
+
+/* ─── Episodios de una serie ─────────────────────────────────────────────── */
+
+async function openSeries(series) {
+  const panel = $("series-panel");
+  $("series-name").textContent = series.name;
+  $("series-list").innerHTML = `<p class="cat-empty">Cargando episodios…</p>`;
+  panel.hidden = false;
+  if (isMobileLayout()) setTab("canales");
+
+  let datos = null;
+  try {
+    const r = await fetch("/api/series/" + encodeURIComponent(series.id) + "/episodes",
+                          { credentials: "include" });
+    if (r.ok) datos = await r.json();
+  } catch { /* se trata abajo */ }
+
+  const episodios = datos?.episodes || [];
+  if (!episodios.length) {
+    $("series-list").innerHTML =
+      `<p class="cat-empty">No hay episodios disponibles para esta serie.</p>`;
+    return;
+  }
+  state.episodes = episodios;
+  $("series-list").innerHTML = episodios.map((e) =>
+    `<button type="button" class="cat-item" data-episode="${escapeHtml(e.id)}">`
+    + `<span class="cat-name">${escapeHtml(e.name)}</span></button>`).join("");
+}
+
+function closeSeries() {
+  $("series-panel").hidden = true;
+  state.episodes = [];
+}
+
+/** Reproduce un episodio ya desplegado (el servidor lo tiene en su cache). */
+async function playEpisode(id) {
+  closeSeries();
   highlightActiveRow(id);
   goToPlayer();
   try { await apiPost("/api/channel/" + encodeURIComponent(id), "{}"); } catch {}
@@ -1050,6 +1099,13 @@ function wireControls() {
   /* Tema */
   document.querySelectorAll(".theme-opt").forEach((b) =>
     b.addEventListener("click", () => setTheme(b.dataset.themeOpt)));
+
+  /* Episodios de una serie */
+  $("series-back").addEventListener("click", closeSeries);
+  $("series-list").addEventListener("click", (e) => {
+    const item = e.target.closest("[data-episode]");
+    if (item) playEpisode(item.dataset.episode);
+  });
 
   /* Pestañas de móvil */
   $("mtabs").addEventListener("click", (e) => {

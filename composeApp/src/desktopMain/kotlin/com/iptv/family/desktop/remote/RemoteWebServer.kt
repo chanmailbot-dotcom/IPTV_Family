@@ -52,6 +52,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.iptv.family.shared.model.CategoryType
 
 /**
  * Parseo manual del body JSON: `receive<T>()` depende del plugin
@@ -109,6 +110,18 @@ class RemoteWebServer(
 
     /** Corrutina que mata ffmpeg cuando nadie lo esta usando. */
     private var transcoderJanitor: kotlinx.coroutines.Job? = null
+
+    /**
+     * Episodios de serie ya desplegados, por id.
+     *
+     * No estan en `appState.channels` -- se piden al panel bajo demanda -- asi
+     * que sin esto `/api/channel/{id}` respondia 404 al intentar reproducir uno.
+     * Se limita el tamaño para que navegar por muchas series no acumule memoria
+     * sin freno.
+     */
+    private val episodesSeen = object : LinkedHashMap<String, Channel>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, Channel>?) = size > 500
+    }
 
     /** Cache del sondeo de audio por canal, para no lanzar un ffprobe por peticion. */
     private val audioInfoByChannel =
@@ -376,14 +389,58 @@ class RemoteWebServer(
                 post("/api/channel/{id}") {
                     if (!requireAdmin()) return@post
                     val id = call.parameters["id"]
-                    val channel = id?.let { cid -> appState.channels.find { it.id == cid } }
+                    // Los episodios no estan en la lista principal (se piden al panel
+                    // bajo demanda), asi que tambien se busca entre los ya desplegados.
+                    val channel = id?.let { cid ->
+                        appState.channels.find { it.id == cid } ?: episodesSeen[cid]
+                    }
                     if (channel == null) {
                         call.respond(HttpStatusCode.NotFound)
+                        return@post
+                    }
+                    // Una serie no es reproducible: `get_series` devuelve el
+                    // contenedor, no un flujo. Antes se intentaba abrir igualmente
+                    // y fallaba siempre. Se rechaza aqui para que ningun cliente
+                    // pueda colarlo.
+                    if (channel.categoryType == CategoryType.SERIES) {
+                        AppLog.d("RemoteServer", "petición remota rechazada: '${channel.name}' es una serie")
+                        call.respond(HttpStatusCode.Conflict, ErrorDto("es_una_serie"))
                         return@post
                     }
                     AppLog.d("RemoteServer", "petición remota: reproducir '${channel.name}'")
                     onRemotePlayRequest(channel)
                     call.respond(bus.currentNowPlaying())
+                }
+
+                /** Episodios de una serie, para desplegarlos en la web. */
+                get("/api/series/{id}/episodes") {
+                    if (!requireAdmin()) return@get
+                    val id = call.parameters["id"].orEmpty()
+                    val series = appState.channels.find { it.id == id }
+                    if (series == null || series.categoryType != CategoryType.SERIES) {
+                        call.respond(HttpStatusCode.NotFound)
+                        return@get
+                    }
+                    val episodes = runCatching { appState.loadSeriesEpisodes(id) }
+                        .onFailure { AppLog.e("RemoteServer", "episodios de '${series.name}'", it) }
+                        .getOrDefault(emptyList())
+                    episodes.forEach { episodesSeen[it.id] = it }
+                    AppLog.d("RemoteServer", "episodios de '${series.name}': ${episodes.size}")
+                    call.respond(
+                        EpisodesDto(
+                            seriesName = series.name,
+                            episodes = episodes.map {
+                                ChannelDto(
+                                    id = it.id,
+                                    name = it.name,
+                                    number = it.number,
+                                    logoUrl = it.logoUrl,
+                                    group = it.group,
+                                    kind = kindOf(it.categoryType),
+                                )
+                            },
+                        )
+                    )
                 }
 
                 // ---- Control remoto del reproductor (volumen, silencio, pausa, zapeo) ----

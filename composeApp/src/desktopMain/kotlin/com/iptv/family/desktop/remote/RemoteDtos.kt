@@ -108,6 +108,21 @@ data class StateDto(
     val nowPlaying: NowPlayingDto = NowPlayingDto(),
 )
 
+/** Error con un codigo estable, para que el cliente pueda distinguirlos. */
+@Serializable
+data class ErrorDto(val error: String)
+
+/**
+ * Episodios de una serie. Van aparte del estado general porque se piden al
+ * panel bajo demanda: `get_series` solo devuelve el contenedor de la serie, y
+ * los episodios reproducibles hay que sacarlos con `get_series_info`.
+ */
+@Serializable
+data class EpisodesDto(
+    val seriesName: String,
+    val episodes: List<ChannelDto> = emptyList(),
+)
+
 @Serializable
 data class FavoriteRequest(val favorite: Boolean)
 

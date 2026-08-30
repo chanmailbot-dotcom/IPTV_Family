@@ -805,3 +805,16 @@ body.is-viewer .layout { grid-template-columns: 1fr; }
 .btn-danger { color: var(--danger); border-color: rgba(244, 63, 94, .4); }
 .btn-danger:hover { background: var(--danger-soft); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ─── Episodios de una serie ───────────────────────────────────────────────
+   Una serie no se puede reproducir por si misma: el proveedor entrega solo el
+   contenedor y los episodios se piden aparte. Se despliegan sobre la lista de
+   canales, reutilizando el mismo panel que las categorias. */
+.series-panel { margin: 0 14px 10px; }
+.series-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+}
+.series-head .icon-btn { width: 30px; height: 30px; flex: none; }
+.series-head .icon-btn .ic { width: 15px; height: 15px; }
+.series-head strong { font-size: 13.5px; font-weight: 600; }

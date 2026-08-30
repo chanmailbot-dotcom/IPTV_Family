@@ -196,6 +196,18 @@ class AppState(
         return null
     }
 
+    /**
+     * Episodios reproducibles de una serie Xtream (vacio si la lista es M3U).
+     *
+     * `get_series` solo devuelve el contenedor de la serie, que NO se puede
+     * reproducir: hay que pedir sus episodios aparte. Sin esto, pulsar una serie
+     * intentaba abrir el contenedor y fallaba siempre.
+     */
+    suspend fun loadSeriesEpisodes(seriesId: String): List<Channel> {
+        val playlist = selectedPlaylist ?: return emptyList()
+        return repository.getSeriesEpisodes(playlist, seriesId)
+    }
+
     /** Descarga la guia si toca (TTL interno). Si falla, se sigue sin EPG. */
     suspend fun loadEpg(forceRefresh: Boolean = false) {
         epgCache.ensureLoaded(epgUrlFor(selectedPlaylist), forceRefresh)

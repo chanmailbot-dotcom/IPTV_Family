@@ -49,6 +49,8 @@ import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.CoroutineScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.style.TextAlign
 
 private enum class TypeFilter(val label: String, val type: CategoryType?) {
     ALL("Todo", null),
@@ -69,6 +71,8 @@ fun ChannelsScreen(
     var search by remember { mutableStateOf("") }
     var unlocked by remember { mutableStateOf(setOf<String>()) }
     var pendingPin by remember { mutableStateOf<Category?>(null) }
+    /** Serie cuyos episodios se estan mostrando, si hay alguna. */
+    var openSeries by remember { mutableStateOf<Channel?>(null) }
 
     fun isAdult(name: String): Boolean =
         appState.settings.isParentalLockEnabled &&
@@ -221,7 +225,14 @@ fun ChannelsScreen(
                     items(channels, key = { it.id }) { channel ->
                         ChannelRow(
                             channel = channel,
-                            onChannelClick = { onPlay(it, channels) },
+                            // Una serie NO es reproducible por si misma: `get_series`
+                            // devuelve el contenedor, no un flujo. Pulsarla abria
+                            // ese contenedor y fallaba siempre; ahora despliega sus
+                            // episodios, como ya hacia Android.
+                            onChannelClick = {
+                                if (it.categoryType == CategoryType.SERIES) openSeries = it
+                                else onPlay(it, channels)
+                            },
                             scope = scope,
                             appState = appState,
                         )
@@ -229,6 +240,18 @@ fun ChannelsScreen(
                 }
             }
         }
+    }
+
+    openSeries?.let { series ->
+        EpisodesDialog(
+            series = series,
+            appState = appState,
+            onDismiss = { openSeries = null },
+            onPlayEpisode = { episode, episodes ->
+                openSeries = null
+                onPlay(episode, episodes)
+            },
+        )
     }
 
     pendingPin?.let { category ->
@@ -242,6 +265,73 @@ fun ChannelsScreen(
             },
         )
     }
+}
+
+/**
+ * Episodios de una serie.
+ *
+ * En Xtream, `get_series` devuelve solo el contenedor de la serie, con un id que
+ * NO es reproducible; los episodios, cada uno con su propio id, hay que pedirlos
+ * aparte con `get_series_info`. Por eso una serie abre esta lista en vez de
+ * intentar reproducirse.
+ */
+@Composable
+private fun EpisodesDialog(
+    series: Channel,
+    appState: AppState,
+    onDismiss: () -> Unit,
+    onPlayEpisode: (Channel, List<Channel>) -> Unit,
+) {
+    var episodes by remember(series.id) { mutableStateOf<List<Channel>?>(null) }
+    var error by remember(series.id) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(series.id) {
+        runCatching { appState.loadSeriesEpisodes(series.id) }
+            .onSuccess { episodes = it }
+            .onFailure {
+                error = it.message ?: "No se pudieron cargar los episodios."
+                episodes = emptyList()
+            }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(series.name, maxLines = 2) },
+        text = {
+            val list = episodes
+            when {
+                list == null -> Box(
+                    Modifier.fillMaxWidth().padding(28.dp),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator() }
+
+                list.isEmpty() -> Text(
+                    error ?: "Esta serie no tiene episodios disponibles.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                else -> LazyColumn(
+                    Modifier.heightIn(max = 440.dp).width(520.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(list, key = { it.id }) { episode ->
+                        TextButton(
+                            onClick = { onPlayEpisode(episode, list) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                episode.name,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Start,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onDismiss) { Text("Cerrar") } },
+    )
 }
 
 @Composable

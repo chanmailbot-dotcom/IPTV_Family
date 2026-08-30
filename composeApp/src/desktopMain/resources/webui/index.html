@@ -214,6 +214,19 @@
           <div id="cat-list" class="cat-list" role="listbox" aria-label="Categorías"></div>
         </div>
 
+        <!-- Episodios de una serie. Una serie no se puede reproducir por si
+             misma: el proveedor solo da el contenedor, y los episodios se piden
+             aparte. Se despliegan aqui, sobre la lista. -->
+        <div id="series-panel" class="cat-panel series-panel" hidden>
+          <div class="series-head">
+            <button type="button" id="series-back" class="icon-btn" aria-label="Volver a la lista">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <strong id="series-name" class="cat-current"></strong>
+          </div>
+          <div id="series-list" class="cat-list" role="list"></div>
+        </div>
+
         <div id="channel-list" class="channel-list" role="list"></div>
         <div id="list-sentinel" class="list-sentinel" hidden aria-hidden="true"><span class="spinner small"></span></div>
         <div id="empty-state" class="empty-state" hidden>

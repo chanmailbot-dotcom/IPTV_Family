@@ -18,6 +18,10 @@ import kotlinx.coroutines.sync.withLock
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.server.request.header
+import io.ktor.server.response.respondBytesWriter
+import io.ktor.utils.io.copyTo
 
 /**
  * Multiplexor de fuente unica ("single-connection mux") hacia la URL real del
@@ -224,9 +228,65 @@ class StreamProxy(private val client: HttpClient) {
             else "URI=\"${segmentProxyUrl(resolve(base, ref), credential)}\""
         }
 
+    /**
+     * Sirve un fichero completo (pelicula, episodio) PASANDO LOS BYTES segun
+     * llegan, sin bajarlo entero ni cachearlo.
+     *
+     * Un episodio son cientos de MB: el camino normal, que baja el recurso a
+     * memoria antes de responder, agotaba el tiempo de espera y no reproducia
+     * nada. Se reenvia ademas la cabecera `Range`, que es lo que permite saltar
+     * dentro del video en vez de tener que verlo desde el principio.
+     *
+     * Aqui NO se toma el mutex del mux: retenerlo mientras dura una pelicula
+     * bloquearia todo lo demas durante una hora. Un fichero bajo demanda es de
+     * todas formas una conexion por espectador -- no hay segmentos repetidos que
+     * compartir, que es de lo que vive el mux en directo.
+     */
+    private suspend fun proxyProgressive(call: ApplicationCall, originUrl: String) {
+        val rango = call.request.headers[HttpHeaders.Range]
+        runCatching {
+            client.prepareGet(originUrl) {
+                headers.append(HttpHeaders.UserAgent, UPSTREAM_USER_AGENT)
+                if (rango != null) headers.append(HttpHeaders.Range, rango)
+            }.execute { upstream ->
+                val status = upstream.status
+                if (status.value !in 200..299) {
+                    AppLog.w("StreamProxy", "mux fichero: upstream $status para ${AppLog.redactUrl(originUrl)}")
+                    call.respondText("", ContentType.Text.Plain, status)
+                    return@execute
+                }
+                // Se replican las cabeceras que el reproductor necesita para saber
+                // el tamaño y poder saltar.
+                upstream.headers[HttpHeaders.ContentRange]?.let { call.response.header(HttpHeaders.ContentRange, it) }
+                upstream.headers[HttpHeaders.AcceptRanges]?.let { call.response.header(HttpHeaders.AcceptRanges, it) }
+                val tipo = upstream.contentType() ?: ContentType.Application.OctetStream
+                val longitud = upstream.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+                call.respondBytesWriter(contentType = tipo, status = status, contentLength = longitud) {
+                    upstream.bodyAsChannel().copyTo(this)
+                }
+            }
+        }.onFailure {
+            // Cortar la descarga a medias es NORMAL aqui: el reproductor abre una
+            // conexion de sondeo, lee las cabeceras y la cierra para volver a pedir
+            // con `Range`; y al cambiar de episodio tambien se corta la anterior.
+            // Registrarlo como error hacia parecer roto algo que funciona.
+            if (it is kotlinx.coroutines.CancellationException) {
+                AppLog.d("StreamProxy", "mux fichero: el reproductor cerro la conexion (normal)")
+            } else {
+                AppLog.e("StreamProxy", "mux fichero: fallo con ${AppLog.redactUrl(originUrl)}: ${it.message}")
+                runCatching { call.respondText("", ContentType.Text.Plain, HttpStatusCode.BadGateway) }
+            }
+        }
+    }
+
     /** Sirve un segmento (.ts/.m4s) desde cache o, si no esta, lo baja y lo cachea. */
     suspend fun proxySegment(call: ApplicationCall, originUrl: String) {
         call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+        // Peliculas y episodios no pasan por la cache: se reenvian segun llegan.
+        if (looksProgressive(originUrl)) {
+            proxyProgressive(call, originUrl)
+            return
+        }
         val hit = segmentCache[originUrl]
         if (hit != null) {
             if (System.currentTimeMillis() - hit.at < SEGMENT_TTL_MS) {
@@ -314,6 +374,27 @@ class StreamProxy(private val client: HttpClient) {
 
         /** Heuristica simple: si la URL de origen es un manifest de texto o un segmento binario. */
         fun looksLikeManifest(url: String): Boolean = url.substringBefore('?').endsWith(".m3u8")
+
+        /**
+         * true si la URL apunta a un fichero COMPLETO (una pelicula, un episodio)
+         * y no a un segmento de directo.
+         *
+         * La diferencia importa mucho: un segmento HLS son ~7 MB y cachearlo en
+         * memoria es gratis, pero un episodio son cientos de MB. Bajarlo entero
+         * antes de servir el primer byte agota el tiempo de espera y no reproduce
+         * nada -- que es justo lo que pasaba al abrir un episodio de serie.
+         *
+         * En Xtream la ruta lo dice: `/live/...` es directo, `/movie/...` y
+         * `/series/...` son ficheros. Para listas M3U se mira la extension.
+         */
+        fun looksProgressive(url: String): Boolean {
+            val path = url.substringBefore('?').lowercase()
+            if ("/movie/" in path || "/series/" in path) return true
+            return PROGRESSIVE_EXTENSIONS.any { path.endsWith(it) }
+        }
+
+        private val PROGRESSIVE_EXTENSIONS =
+            listOf(".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".flv")
 
         /**
          * Suelo del TTL de un manifest de directo (ver [manifestTtlFor], que lo
