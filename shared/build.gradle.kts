@@ -45,6 +45,18 @@ kotlin {
     }
 }
 
+/**
+ * Heap de las pruebas, explicito y ajustable: `-PtestHeap=128m`.
+ *
+ * La guia EPG es la pieza que puede tumbar la aplicacion por memoria, y en un
+ * Fire TV el reparto es de unos cientos de MB, no los varios GB que tiene por
+ * defecto una JVM de escritorio. Un tope fijo aqui hace que una regresion de
+ * memoria salga en las pruebas y no en el salon de alguien.
+ */
+tasks.withType<Test>().configureEach {
+    maxHeapSize = (project.findProperty("testHeap") as String?) ?: "256m"
+}
+
 android {
     namespace = "com.iptv.family.shared"
     compileSdk = 35
