@@ -49,40 +49,56 @@ class FileKeyValueStore(private val dir: File) : KeyValueStore {
 
     override fun write(key: String, value: String) {
         val name = sanitize(key)
-        val target = File(dir, name)
-        val tmp = File(dir, "$name.tmp")
+        // Dos escrituras de la MISMA clave a la vez se pisaban: ambas usaban un
+        // temporal con el mismo nombre, la primera lo renombraba y la segunda se
+        // quedaba sin fichero que mover (NoSuchFileException) o, peor, mezclaba
+        // contenidos. Pasa de verdad: basta con que dos pantallas pidan cargar la
+        // misma lista a la vez. Se arregla por partida doble -- un temporal
+        // distinto por escritura y un cerrojo por clave.
+        synchronized(lockFor(name)) {
+            val target = File(dir, name)
+            val tmp = File.createTempFile("$name-", ".tmp", dir)
 
-        // 1) Contenido completo en el temporal, forzado a disco. Sin el fsync, el
-        //    renombrado puede llegar antes que los datos y quedar un fichero vacio.
-        FileOutputStream(tmp).use { out ->
-            out.write(value.toByteArray(Charsets.UTF_8))
-            out.flush()
-            out.fd.sync()
-        }
+            try {
+                // 1) Contenido completo en el temporal, forzado a disco. Sin el fsync,
+                //    el renombrado puede llegar antes que los datos y quedar vacio.
+                FileOutputStream(tmp).use { out ->
+                    out.write(value.toByteArray(Charsets.UTF_8))
+                    out.flush()
+                    out.fd.sync()
+                }
 
-        // 2) La version buena anterior se guarda antes de pisarla.
-        if (target.isFile) {
-            runCatching { target.copyTo(File(dir, "$name.bak"), overwrite = true) }
-        }
+                // 2) La version buena anterior se guarda antes de pisarla.
+                if (target.isFile) {
+                    runCatching { target.copyTo(File(dir, "$name.bak"), overwrite = true) }
+                }
 
-        // 3) Renombrado: atomico donde el sistema lo permita.
-        runCatching {
-            Files.move(
-                tmp.toPath(), target.toPath(),
-                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
-            )
-        }.recoverCatching {
-            if (it is AtomicMoveNotSupportedException) {
-                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            } else {
-                throw it
+                // 3) Renombrado: atomico donde el sistema lo permita.
+                runCatching {
+                    Files.move(
+                        tmp.toPath(), target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
+                    )
+                }.recoverCatching {
+                    if (it is AtomicMoveNotSupportedException) {
+                        Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    } else {
+                        throw it
+                    }
+                }.onFailure {
+                    AppLog.e("Store", "no se pudo guardar '$name'", it)
+                    throw it
+                }
+            } finally {
+                // Si algo fallo antes del renombrado, el temporal no se queda ahi
+                // acumulandose escritura tras escritura.
+                if (tmp.exists()) tmp.delete()
             }
-        }.onFailure {
-            AppLog.e("Store", "no se pudo guardar '$name'", it)
-            tmp.delete()
-            throw it
         }
     }
+
+    /** Un cerrojo por clave: dos claves distintas se pueden escribir a la vez. */
+    private fun lockFor(name: String): Any = locks.computeIfAbsent(name) { Any() }
 
     override fun read(key: String): String? {
         val target = File(dir, sanitize(key))
@@ -113,6 +129,8 @@ class FileKeyValueStore(private val dir: File) : KeyValueStore {
         File(dir, name).delete()
         File(dir, "$name.bak").delete()
     }
+
+    private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
 
     private fun sanitize(key: String): String =
         key.replace(Regex("[^a-zA-Z0-9._-]"), "_")
