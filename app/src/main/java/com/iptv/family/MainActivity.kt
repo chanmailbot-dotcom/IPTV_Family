@@ -72,6 +72,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var destination by remember { mutableStateOf(Destination.HOME) }
+            /**
+             * Seccion desde la que se abrio el reproductor, para volver ahi al salir.
+             * Antes se volvia SIEMPRE a «TV en vivo», aunque estuvieras viendo una
+             * pelicula, un episodio o algo de Favoritos: perdias el sitio y habia que
+             * volver a navegar hasta el.
+             */
+            var playerOrigin by remember { mutableStateOf(Destination.LIVE) }
             var playing by remember { mutableStateOf<Channel?>(null) }
             var zapList by remember { mutableStateOf<List<Channel>>(emptyList()) }
             val scope = rememberCoroutineScope()
@@ -105,6 +112,7 @@ class MainActivity : ComponentActivity() {
             fun play(channel: Channel, list: List<Channel>) {
                 AppLog.d("Main", "Usuario pide reproducir '${channel.name}' (${AppLog.redactUrl(channel.url)})")
                 preview(channel, list)
+                if (destination != Destination.PLAYER) playerOrigin = destination
                 destination = Destination.PLAYER
             }
 
@@ -169,7 +177,7 @@ class MainActivity : ComponentActivity() {
                                             channel = channel,
                                             zapList = zapList,
                                             onSelectChannel = { ch -> preview(ch, zapList) },
-                                            onBack = { destination = Destination.LIVE },
+                                            onBack = { destination = playerOrigin },
                                         )
                                     }
                                 }
@@ -185,7 +193,10 @@ class MainActivity : ComponentActivity() {
                                     MiniPlayerPreview(
                                         controller = ctrl,
                                         channelName = current.name,
-                                        onExpand = { destination = Destination.PLAYER },
+                                        onExpand = {
+                                            playerOrigin = destination
+                                            destination = Destination.PLAYER
+                                        },
                                     )
                                 }
                             }

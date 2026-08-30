@@ -50,6 +50,7 @@ import androidx.media3.ui.PlayerView
 import com.iptv.family.player.ExoPlayerController
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.shape.CircleShape
 
 private const val CONTROLS_HIDE_DELAY_MS = 4000L
 private const val ZAP_BAR_HIDE_DELAY_MS = 5000L
@@ -80,12 +81,19 @@ fun PlayerScreen(
     var zapBarVisible by remember { mutableStateOf(false) }
     var lastZapInteraction by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
+    /** Foco de la barra de mandos, para entrar en ella al pulsar OK. */
+    val controlsFocus = remember { FocusRequester() }
 
     // Los controles (play, volumen...) se ocultan solos: en TV, tapan el video
     // y nadie los quiere ver fijos todo el rato. Cualquier pulsacion del mando
     // los vuelve a mostrar y reinicia la cuenta atras.
-    LaunchedEffect(lastInteraction) {
-        controlsVisible = true
+    // Este temporizador SOLO oculta. Antes tambien mostraba con cualquier
+    // pulsacion, y con el modelo de dos modos eso se muerde la cola: la primera
+    // flecha sacaria los mandos y a partir de ahi las flechas dejarian de
+    // zapear. Ahora los mandos aparecen cuando se piden (OK, Menu, play/pausa)
+    // y se van solos tras unos segundos sin tocar nada.
+    LaunchedEffect(controlsVisible, lastInteraction) {
+        if (!controlsVisible) return@LaunchedEffect
         delay(CONTROLS_HIDE_DELAY_MS)
         controlsVisible = false
     }
@@ -103,11 +111,57 @@ fun PlayerScreen(
             .fillMaxSize()
             .focusRequester(focusRequester)
             .focusable()
+            // Mando a distancia, en DOS MODOS.
+            //
+            // Antes las cuatro flechas se consumian siempre para zapear, asi que
+            // el foco no podia bajar nunca a los botones de abajo: estaban
+            // dibujados pero eran inalcanzables con el mando. Y arriba/abajo
+            // hacia lo mismo que izquierda/derecha, desperdiciando dos
+            // direcciones.
+            //
+            //   Viendo (mandos ocultos)   flechas = zapear · OK = mostrar mandos
+            //   Mandos visibles           flechas = moverse por ellos · Atras = ocultarlos
+            //
+            // Es como funciona cualquier reproductor de television, y es lo que
+            // hace que los botones de abajo se puedan usar.
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 lastInteraction = System.currentTimeMillis()
+
+                // Teclas de medios: valen en los dos modos. Muchos mandos (y todos
+                // los teclados de TV) las tienen y antes no hacian nada.
                 when (event.key) {
-                    // Arriba/abajo: canal anterior/siguiente al instante, sin volver al listado.
+                    Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
+                        controller.togglePlayPause()
+                        controlsVisible = true
+                        return@onKeyEvent true
+                    }
+                    Key.MediaNext, Key.ChannelUp -> {
+                        zapList.neighbourOf(channel, +1)?.let(onSelectChannel)
+                        return@onKeyEvent true
+                    }
+                    Key.MediaPrevious, Key.ChannelDown -> {
+                        zapList.neighbourOf(channel, -1)?.let(onSelectChannel)
+                        return@onKeyEvent true
+                    }
+                    Key.Menu, Key.Info -> {
+                        controlsVisible = !controlsVisible
+                        return@onKeyEvent true
+                    }
+                    else -> Unit
+                }
+
+                if (controlsVisible) {
+                    // Con los mandos a la vista, las flechas son para recorrerlos:
+                    // NO se consumen, que es justo lo que faltaba.
+                    return@onKeyEvent when (event.key) {
+                        Key.Back, Key.Escape -> { controlsVisible = false; true }
+                        else -> false
+                    }
+                }
+
+                when (event.key) {
+                    // Arriba/abajo: canal anterior/siguiente al instante.
                     Key.DirectionUp -> {
                         zapList.neighbourOf(channel, -1)?.let(onSelectChannel)
                         true
@@ -116,7 +170,7 @@ fun PlayerScreen(
                         zapList.neighbourOf(channel, +1)?.let(onSelectChannel)
                         true
                     }
-                    // Izquierda/derecha: lo mismo, pero ademas muestra la tira de canales
+                    // Izquierda/derecha: tambien zapea, pero enseña la tira de canales
                     // para ubicarse (se oculta sola a los 5s sin tocar el mando).
                     Key.DirectionLeft -> {
                         zapList.neighbourOf(channel, -1)?.let(onSelectChannel)
@@ -130,7 +184,12 @@ fun PlayerScreen(
                         lastZapInteraction = System.currentTimeMillis()
                         true
                     }
-                    else -> false // deja pasar OK/atras/etc. para que sigan funcionando
+                    // OK saca los mandos y les pasa el foco.
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                        controlsVisible = true
+                        true
+                    }
+                    else -> false // Atras y demas siguen su curso normal
                 }
             },
     ) {
@@ -161,21 +220,47 @@ fun PlayerScreen(
                 ZapBar(zapList, channel)
             }
 
+            // Al sacar los mandos hay que MOVER el foco hasta ellos; si no, las
+            // flechas siguen operando sobre el contenedor y los botones quedan
+            // igual de inalcanzables que antes.
+            LaunchedEffect(controlsVisible) {
+                if (controlsVisible) {
+                    delay(80) // dar tiempo a que se compongan
+                    runCatching { controlsFocus.requestFocus() }
+                } else {
+                    runCatching { focusRequester.requestFocus() }
+                }
+            }
+
             AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
                 Row(
                     Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver") }
-                    IconButton({ controller.togglePlayPause(); lastInteraction = System.currentTimeMillis() }) {
+                    IconButton(onBack, modifier = Modifier.tvFocusable(CircleShape)) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
+                    }
+                    // El foco entra aqui al sacar los mandos con OK: es la accion
+                    // mas probable, y asi no hay que buscarlo a ciegas.
+                    IconButton(
+                        onClick = { controller.togglePlayPause(); lastInteraction = System.currentTimeMillis() },
+                        modifier = Modifier.tvFocusable(CircleShape).focusRequester(controlsFocus),
+                    ) {
                         Icon(
                             if (controller.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = null,
+                            contentDescription = if (controller.isPlaying) "Pausar" else "Reproducir",
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                     Text(channel.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    // Leyenda de mandos: sin ella no hay forma de adivinar que
+                    // arriba/abajo zapea ni que Atras cierra esta barra.
+                    Text(
+                        "▲▼ canal   ·   Atrás cerrar",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
