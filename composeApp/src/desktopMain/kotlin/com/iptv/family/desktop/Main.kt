@@ -169,17 +169,30 @@ private fun mainWindow() = application {
         },
         state = windowState,
         title = playing?.let { "${it.name} ${AppStrings.WINDOW_TITLE_SUFFIX}" } ?: AppStrings.APP_TITLE,
+        // Atajos del reproductor. SOLO valen estando en la pantalla del
+        // reproductor, que es la unica sin campos de texto.
+        //
+        // Antes bastaba con que hubiera un canal cargado, asi que escribir en el
+        // buscador de Canales era imposible: la "n" saltaba al canal siguiente,
+        // la "p" al anterior y ambas te expulsaban a la pantalla del reproductor
+        // (`play()` cambia de destino). Comprobado escribiendo "span news p":
+        // dos cambios de canal no pedidos con 9 ms de diferencia.
         onKeyEvent = { event ->
             if (event.type != KeyEventType.KeyDown) return@Window false
-            when {
-                event.key == Key.Escape && isFullscreen -> { isFullscreen = false; true }
-                event.key == Key.F && playing != null -> { isFullscreen = !isFullscreen; true }
-                event.key == Key.Spacebar && playing != null -> { controller?.togglePlayPause(); true }
-                event.key == Key.M && playing != null -> { controller?.changeMuted(controller?.isMuted != true); true }
-                event.key == Key.DirectionUp && playing != null -> { controller?.changeVolume((controller?.volume ?: 80) + 5); true }
-                event.key == Key.DirectionDown && playing != null -> { controller?.changeVolume((controller?.volume ?: 80) - 5); true }
-                event.key == Key.N && playing != null -> { zap(+1); true }
-                event.key == Key.P && playing != null -> { zap(-1); true }
+            // Salir de pantalla completa se atiende siempre: es la via de escape.
+            if (event.key == Key.Escape && isFullscreen) {
+                isFullscreen = false
+                return@Window true
+            }
+            if (destination != Destination.PLAYER || playing == null) return@Window false
+            when (event.key) {
+                Key.F -> { isFullscreen = !isFullscreen; true }
+                Key.Spacebar -> { controller?.togglePlayPause(); true }
+                Key.M -> { controller?.changeMuted(controller?.isMuted != true); true }
+                Key.DirectionUp -> { controller?.changeVolume((controller?.volume ?: 80) + 5); true }
+                Key.DirectionDown -> { controller?.changeVolume((controller?.volume ?: 80) - 5); true }
+                Key.N -> { zap(+1); true }
+                Key.P -> { zap(-1); true }
                 else -> false
             }
         },
