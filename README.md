@@ -107,14 +107,33 @@ Ojo: Windows Installer solo actualiza en sitio si la versión **sube**
 (`packageVersion` en `composeApp/build.gradle.kts`). Con el mismo número aborta
 con «Another version of this product is already installed».
 
+## Idiomas
+
+Castellano e inglés, según el idioma del sistema (cualquier otro cae en inglés).
+Las 326 cadenas viven en `shared/.../i18n/Textos.kt`, que es una **interfaz**: al
+añadir un texto, el compilador obliga a escribirlo en los dos idiomas. Los
+mensajes de log se quedan en castellano a propósito — no los ve el usuario y
+traducirlos solo dificultaría seguir un informe de fallo.
+
+## Calidad
+
+```bash
+./gradlew analisisEstatico     # detekt: lógica con tipos, UI de Android sin ellos
+./gradlew :shared:desktopTest :composeApp:desktopTest
+```
+
+El análisis va en dos mitades a propósito: la lógica (`shared` + escritorio) se
+analiza **con resolución de tipos**, y la interfaz de Android sin ella. Dándole
+el classpath de la JVM, detekt no se limita a saber menos: concluye mal (marcaba
+como código inalcanzable cuatro líneas que funcionan). Hay líneas base con la
+deuda existente, así que el análisis falla solo con hallazgos **nuevos**.
+
 ## Pendiente
 
-- Traducir lo que queda: pantalla de Ajustes, mensajes de error del repositorio y
-  del cliente Xtream, y la interfaz web (la infraestructura ya está: ver
-  `shared/.../i18n/Textos.kt`)
-- Pruebas de interfaz automatizadas
-- El análisis estático corre sin resolución de tipos, así que las reglas que
-  dependen de los tipos están desactivadas
+- La interfaz **web** sigue solo en castellano: necesita su propio mecanismo de
+  traducción en JavaScript, que es un trabajo distinto del de la aplicación
+- Pruebas de interfaz en Android (las de escritorio ya están, en
+  `composeApp/src/desktopTest`)
 
 ## Licencia
 
