@@ -55,6 +55,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import com.iptv.family.player.ExoPlayerController
 import com.iptv.family.state.AppState
+import com.iptv.family.shared.i18n.T
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.shape.CircleShape
@@ -354,7 +355,7 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     IconButton(onBack, modifier = Modifier.tvFocusable(CircleShape)) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = T.volver)
                     }
                     // El foco entra aqui al sacar los mandos con OK: es la accion
                     // mas probable, y asi no hay que buscarlo a ciegas.
@@ -364,7 +365,7 @@ fun PlayerScreen(
                     ) {
                         Icon(
                             if (controller.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = if (controller.isPlaying) "Pausar" else "Reproducir",
+                            contentDescription = if (controller.isPlaying) T.pausar else T.reproducir,
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
@@ -400,13 +401,13 @@ fun PlayerScreen(
                         TextButton(
                             onClick = { showAudioPicker = true; lastInteraction = System.currentTimeMillis() },
                             modifier = Modifier.tvFocusable(MaterialTheme.shapes.small),
-                        ) { Text("Audio") }
+                        ) { Text(T.audio) }
                     }
                     if (controller.subtitleTracks.isNotEmpty()) {
                         TextButton(
                             onClick = { showSubtitlePicker = true; lastInteraction = System.currentTimeMillis() },
                             modifier = Modifier.tvFocusable(MaterialTheme.shapes.small),
-                        ) { Text(if (controller.subtitlesEnabled) "Subtítulos ✓" else "Subtítulos") }
+                        ) { Text(if (controller.subtitlesEnabled) "${T.subtitulos} ✓" else T.subtitulos) }
                     }
                     // Leyenda de mandos: sin ella no hay forma de adivinar que
                     // hacen las flechas ni que Atras cierra esta barra.
@@ -423,7 +424,7 @@ fun PlayerScreen(
 
     if (showAudioPicker) {
         TrackPickerDialog(
-            title = "Pista de audio",
+            title = T.pistaDeAudio,
             options = controller.audioTracks,
             allowOff = false,
             onPick = { id -> controller.selectAudioTrack(id!!) },
@@ -432,7 +433,7 @@ fun PlayerScreen(
     }
     if (showSubtitlePicker) {
         TrackPickerDialog(
-            title = "Subtítulos",
+            title = T.subtitulos,
             options = controller.subtitleTracks,
             allowOff = true,
             offSelected = !controller.subtitlesEnabled,
@@ -486,14 +487,14 @@ private fun TrackPickerDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (allowOff) {
-                    TrackRow("Desactivados", offSelected) { onPick(null); onDismiss() }
+                    TrackRow(T.subtitulosDesactivados, offSelected) { onPick(null); onDismiss() }
                 }
                 options.forEach { option ->
                     TrackRow(option.label, option.selected) { onPick(option.id); onDismiss() }
                 }
             }
         },
-        confirmButton = { TextButton(onDismiss) { Text("Cerrar") } },
+        confirmButton = { TextButton(onDismiss) { Text(T.cerrar) } },
     )
 }
 

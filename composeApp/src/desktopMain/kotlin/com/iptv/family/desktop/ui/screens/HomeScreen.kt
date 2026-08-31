@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.desktop.ui.AppStrings
+import com.iptv.family.shared.i18n.T
 import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
 import kotlinx.coroutines.CoroutineScope
@@ -223,7 +224,7 @@ private fun PlaylistCard(
             Text(
                 buildString {
                     append(playlist.type.readableName)
-                    if (channelCount != null) append(" · $channelCount canales")
+                    if (channelCount != null) append(" · ${T.cuentaCanales(channelCount)}")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -298,9 +299,9 @@ private fun EmptyState(onAddClick: () -> Unit) {
 
 private val SourceType.readableName: String
     get() = when (this) {
-        SourceType.M3U_URL -> "Lista M3U por URL"
-        SourceType.M3U_FILE -> "Archivo M3U local"
-        SourceType.XTREAM -> "Xtream Codes"
+        SourceType.M3U_URL -> T.listaM3uPorUrl
+        SourceType.M3U_FILE -> T.listaM3uArchivo
+        SourceType.XTREAM -> T.listaXtream
     }
 
 /** Por debajo de este ancho, los botones con texto dejan de caber en la fila. */

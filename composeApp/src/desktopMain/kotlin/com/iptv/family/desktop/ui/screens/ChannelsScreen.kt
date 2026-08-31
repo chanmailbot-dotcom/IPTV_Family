@@ -61,12 +61,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.iptv.family.shared.domain.ParentalControl
+import com.iptv.family.shared.i18n.T
 
-private enum class TypeFilter(val label: String, val type: CategoryType?) {
-    ALL("Todo", null),
-    LIVE("TV en directo", CategoryType.LIVE),
-    VOD("Películas", CategoryType.VOD),
-    SERIES("Series", CategoryType.SERIES),
+private enum class TypeFilter(val type: CategoryType?) {
+    ALL(null),
+    LIVE(CategoryType.LIVE),
+    VOD(CategoryType.VOD),
+    SERIES(CategoryType.SERIES);
+
+    /** En getter y no en el constructor: una etiqueta fijada al construir el
+     *  enum se resuelve una sola vez y se quedaria en el idioma de entonces. */
+    val label: String
+        get() = when (this) {
+            ALL -> T.todo
+            LIVE -> T.tvEnDirecto
+            VOD -> T.peliculas
+            SERIES -> T.series
+        }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -133,7 +144,7 @@ fun ChannelsScreen(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 CircularProgressIndicator()
-                Text("Cargando canales…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(T.cargandoCanales, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         return
@@ -230,7 +241,7 @@ fun ChannelsScreen(
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
-                placeholder = { Text("Buscar canal…") },
+                placeholder = { Text(T.buscarCanal) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
@@ -265,7 +276,7 @@ fun ChannelsScreen(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                "${channels.size} canales",
+                T.cuentaCanales(channels.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -437,7 +448,7 @@ private fun CategoryDropdown(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Elegir categoría")
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = T.elegirCategoria)
         }
 
         DropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
@@ -491,7 +502,7 @@ private fun CategorySidebar(
             .padding(10.dp),
     ) {
         Text(
-            "Categorías",
+            T.categorias,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),

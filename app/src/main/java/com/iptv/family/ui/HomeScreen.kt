@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.iptv.family.shared.i18n.T
 import com.iptv.family.state.AppState
 import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
@@ -66,7 +67,7 @@ fun HomeScreen(
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Mis listas",
+                T.misListas,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -74,7 +75,7 @@ fun HomeScreen(
             Button({ showAddDialog = true }) {
                 Icon(Icons.Rounded.Add, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text("Añadir lista")
+                Text(T.añadirLista)
             }
         }
 
@@ -85,7 +86,7 @@ fun HomeScreen(
                     .padding(14.dp),
             ) {
                 Text(message, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
-                TextButton({ scope.launch { appState.refresh() } }) { Text("Reintentar") }
+                TextButton({ scope.launch { appState.refresh() } }) { Text(T.reintentar) }
             }
         }
 
@@ -125,12 +126,12 @@ fun HomeScreen(
     pendingDelete?.let { playlist ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Eliminar lista") },
-            text = { Text("¿Seguro que quieres eliminar «${playlist.name}»?") },
+            title = { Text(T.eliminarLista) },
+            text = { Text(T.confirmarBorrado(playlist.name)) },
             confirmButton = {
-                Button({ scope.launch { appState.deletePlaylist(playlist.id) }; pendingDelete = null }) { Text("Eliminar") }
+                Button({ scope.launch { appState.deletePlaylist(playlist.id) }; pendingDelete = null }) { Text(T.eliminar) }
             },
-            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancelar") } },
+            dismissButton = { TextButton({ pendingDelete = null }) { Text(T.cancelar) } },
         )
     }
 }
@@ -176,8 +177,8 @@ private fun PlaylistRow(
                 Text(playlist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     buildString {
-                        append(if (playlist.type == SourceType.XTREAM) "Xtream Codes" else "Lista M3U")
-                        if (channelCount != null) append(" · $channelCount canales")
+                        append(if (playlist.type == SourceType.XTREAM) T.listaXtream else T.listaM3uPorUrl)
+                        if (channelCount != null) append(" · ${T.cuentaCanales(channelCount)}")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -186,7 +187,7 @@ private fun PlaylistRow(
             if (isLoading) {
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             } else if (isSelected) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "Ver canales", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Rounded.PlayArrow, contentDescription = T.verCanales, tint = MaterialTheme.colorScheme.primary)
             }
         }
         Box(
@@ -223,7 +224,7 @@ private fun AddPlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Añadir lista") },
+        title = { Text(T.añadirLista) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -288,8 +289,8 @@ private fun AddPlaylistDialog(
                     onDismiss()
                 },
                 enabled = canSave,
-            ) { Text("Guardar") }
+            ) { Text(T.guardar) }
         },
-        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+        dismissButton = { TextButton(onDismiss) { Text(T.cancelar) } },
     )
 }

@@ -55,6 +55,7 @@ import com.iptv.family.player.ExoPlayerController
 import com.iptv.family.state.AppState
 import com.iptv.family.shared.model.Category
 import com.iptv.family.shared.model.CategoryType
+import com.iptv.family.shared.i18n.T
 import com.iptv.family.shared.model.Channel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -148,7 +149,7 @@ fun ChannelsScreen(
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
-                    label = { Text("Buscar") },
+                    label = { Text(T.buscarCanal) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 )
@@ -197,14 +198,13 @@ fun ChannelsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         CircularProgressIndicator()
-                        Text("Cargando canales…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(T.cargandoCanales, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else if (list.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (mediaType == null) "Aún no tienes canales favoritos. Márcalos con la estrella (mantén pulsado)."
-                        else "No hay elementos en esta categoría.",
+                        if (mediaType == null) T.sinFavoritos else T.sinElementosEnCategoria,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

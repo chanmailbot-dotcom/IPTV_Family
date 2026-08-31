@@ -1,5 +1,7 @@
 package com.iptv.family.shared.util
 
+import com.iptv.family.shared.i18n.T
+
 /**
  * Cuánto hace de un instante, en palabras.
  *
@@ -9,15 +11,9 @@ package com.iptv.family.shared.util
  * usuario se fíe de la lista o la refresque.
  */
 fun textoAntiguedad(instanteMs: Long, ahoraMs: Long = System.currentTimeMillis()): String {
+    // Un reloj mal puesto (o una copia recién hecha) no puede producir
+    // "hace -3 horas": las traducciones tratan todo lo menor que dos minutos
+    // como "hace un momento", asi que en la duda se dice que es de ahora.
     val minutos = (ahoraMs - instanteMs) / 60_000
-    return when {
-        // Un reloj mal puesto (o una copia recién hecha) no puede producir
-        // "hace -3 horas": en la duda, se dice que es de ahora mismo.
-        minutos < 2 -> "hace un momento"
-        minutos < 60 -> "hace $minutos minutos"
-        minutos < 120 -> "hace una hora"
-        minutos < 24 * 60 -> "hace ${minutos / 60} horas"
-        minutos < 48 * 60 -> "ayer"
-        else -> "hace ${minutos / (24 * 60)} días"
-    }
+    return T.antiguedad(minutos)
 }

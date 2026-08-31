@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.iptv.family.shared.data.repository.LibraryRepository
+import com.iptv.family.shared.i18n.T
 import com.iptv.family.shared.util.textoAntiguedad
 import com.iptv.family.shared.data.xmltv.CommonEpgCache
 import com.iptv.family.shared.log.AppLog
@@ -274,10 +275,7 @@ class LibraryState(
     private fun applyResult(result: LibraryRepository.ChannelsResult) {
         when (result) {
             is LibraryRepository.ChannelsResult.Ok -> {
-                avisoSinConexion = result.guardadoEnMs?.let {
-                    "Sin conexión con el proveedor: se muestra la lista guardada " +
-                        "${textoAntiguedad(it)}."
-                }
+                avisoSinConexion = result.guardadoEnMs?.let { T.avisoListaGuardada(textoAntiguedad(it)) }
                 error = null
                 AppLog.d("AppState", "applyResult: ${result.channels.size} canales cargados")
                 channels = result.channels.map { ch ->
@@ -300,7 +298,7 @@ class LibraryState(
         val cur = categories.toMutableList()
         val all = Category(
             id = "all",
-            name = "Todas",
+            name = T.todas,
             type = CategoryType.LIVE,
             channels = channels.map { it.id },
         )
