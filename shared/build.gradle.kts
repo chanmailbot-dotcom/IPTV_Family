@@ -19,6 +19,12 @@ kotlin {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                // Solo el RUNTIME de Compose (mutableStateOf y compañia), no la UI:
+                // el estado de la biblioteca vivia duplicado en escritorio y en
+                // Android, y cada arreglo habia que hacerlo dos veces. Aqui no hay
+                // ni una funcion @Composable, asi que tampoco hace falta el plugin
+                // del compilador de Compose en este modulo.
+                api("org.jetbrains.compose.runtime:runtime:1.7.1")
             }
         }
 
