@@ -78,6 +78,19 @@ Copy-Item (Join-Path $source 'libvlc.dll')     $target -Force
 Copy-Item (Join-Path $source 'libvlccore.dll') $target -Force
 Copy-Item (Join-Path $source 'plugins')        $target -Recurse -Force
 
+# Las licencias de VideoLAN viajan CON el binario. Antes se copiaban las DLL y
+# se dejaban atras: el instalador repartia libvlc y 365 plugins sin una sola
+# linea de licencia, cuando lo que exigen tanto la LGPL como la GPL es
+# precisamente que el texto acompañe a lo que se distribuye.
+$licencias = Get-ChildItem $source -File |
+    Where-Object { $_.Name -match '^(COPYING|AUTHORS|NEWS|THANKS)' }
+if ($licencias) {
+    foreach ($l in $licencias) { Copy-Item $l.FullName $target -Force }
+    Write-Host "Licencias de VLC copiadas: $($licencias.Name -join ', ')"
+} else {
+    Write-Warning 'El zip de VLC no traia COPYING/AUTHORS: revisa licencias/ a mano.'
+}
+
 foreach ($needed in 'libvlc.dll', 'libvlccore.dll', 'plugins') {
     if (-not (Test-Path (Join-Path $target $needed))) { throw "Falta $needed en $target" }
 }

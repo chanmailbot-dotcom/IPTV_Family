@@ -239,6 +239,23 @@ jobs:
 
             ### Cambios
             ${{ github.event.head_commit.message }}
+
+            ---
+
+            **Esta aplicacion no incluye ningun contenido, ni canales, ni
+            listas.** Hace falta tu propia lista M3U o las credenciales del
+            proveedor que hayas contratado.
+
+            **Licencias.** El codigo de IPTV Family es MIT. El instalador de
+            Windows incluye ademas el motor de video **VLC** (VideoLAN), con
+            licencia LGPL v2.1+ y, en algunos plugins, GPL v2+: por eso el
+            paquete `.msi` se distribuye bajo GPL v2 o posterior. Detalles,
+            textos de licencia y enlace al codigo fuente de VLC en
+            [LICENSES-TERCEROS.md](https://github.com/chanmailbot-dotcom/IPTV_Family/blob/master/LICENSES-TERCEROS.md).
+            El `.apk` usa Media3/ExoPlayer, no VLC, y va bajo MIT.
+
+            VLC y VideoLAN son marcas de VideoLAN. Este proyecto no esta
+            asociado a VideoLAN ni respaldado por ella.
           files: release/*
           draft: false
           prerelease: false

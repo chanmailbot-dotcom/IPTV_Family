@@ -128,7 +128,7 @@ cd AndroidApp
 - ✅ Descarga en background con progreso visual
 - ✅ Instalación automática via FileProvider (Android 8+)
 - ✅ Manejo de permisos automático
-- ✅ Tema oscuro estilo IBO Player
+- ✅ Tema oscuro pensado para verse de lejos en una televisión
 - ✅ Compatible Android 5.0+ (API 21+)
 
 ---

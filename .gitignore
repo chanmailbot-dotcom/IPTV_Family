@@ -40,3 +40,7 @@ composeApp/resources/linux-x64/
 
 # Credenciales de firma del APK (*.jks y *.keystore ya estan arriba)
 keystore.properties
+
+# Copia de los textos de licencia que se mete en el paquete (ver
+# composeApp: sincronizarLicencias). El original vive en licencias/
+composeApp/resources/common/licencias/

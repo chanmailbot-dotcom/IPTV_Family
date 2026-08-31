@@ -59,6 +59,32 @@ kotlin {
     }
 }
 
+/**
+ * Mete los textos de licencia DENTRO del paquete.
+ *
+ * Tanto la LGPL como la GPL exigen que el texto acompañe a lo que se distribuye,
+ * y el instalador repartia libvlc y sus 365 plugins sin una sola linea de
+ * licencia. Se copian al empaquetar en vez de tenerlos duplicados en el
+ * repositorio: la copia de `resources/common/licencias` esta en .gitignore.
+ *
+ * El `COPYING` propio de VideoLAN lo trae `scripts/fetch-vlc.ps1` junto a las
+ * DLL, que es donde corresponde.
+ */
+val sincronizarLicencias by tasks.registering(Copy::class) {
+    from(rootProject.file("licencias"))
+    from(rootProject.file("LICENSE"))
+    from(rootProject.file("LICENSES-TERCEROS.md"))
+    into(layout.projectDirectory.dir("resources/common/licencias"))
+}
+
+// `prepareAppResources` es la que de verdad lee ese directorio; sin declararlo,
+// Gradle avisa (con razon) de que el orden de las dos tareas no esta garantizado.
+tasks.matching {
+    it.name.startsWith("package") ||
+        it.name == "createDistributable" ||
+        it.name.startsWith("prepareAppResources")
+}.configureEach { dependsOn(sincronizarLicencias) }
+
 compose.desktop {
     application {
         mainClass = "com.iptv.family.desktop.MainKt"
