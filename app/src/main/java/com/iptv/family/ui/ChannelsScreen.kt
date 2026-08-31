@@ -314,7 +314,7 @@ private fun EpisodesDialog(
                 list == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-                list.isEmpty() -> Text("No se encontraron episodios para esta serie.")
+                list.isEmpty() -> Text(T.sinEpisodiosParaLaSerie)
                 else -> LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(list, key = { it.id }) { episode ->
                         ChannelRow(
@@ -326,7 +326,7 @@ private fun EpisodesDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onDismiss) { Text("Cerrar") } },
+        confirmButton = { TextButton(onDismiss) { Text(T.cerrar) } },
     )
 }
 
@@ -370,7 +370,7 @@ private fun CategoryRow(category: Category, selected: Boolean, locked: Boolean, 
         if (locked) {
             Icon(
                 Icons.Rounded.Lock,
-                contentDescription = "Bloqueada",
+                contentDescription = T.bloqueada,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -441,7 +441,7 @@ fun ChannelRow(
         }
         Icon(
             if (channel.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-            contentDescription = if (channel.isFavorite) "Favorito (mantén pulsado para quitar)" else "Mantén pulsado para marcar favorito",
+            contentDescription = if (channel.isFavorite) T.favoritoMantenPulsado else T.mantenPulsadoParaFavorito,
             tint = if (channel.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -482,7 +482,7 @@ private fun PosterCard(channel: Channel, onClick: () -> Unit, onToggleFavorite: 
             if (channel.isFavorite) {
                 Icon(
                     Icons.Rounded.Star,
-                    contentDescription = "Favorito",
+                    contentDescription = T.favorito,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
                 )
@@ -518,18 +518,18 @@ private fun UnlockPinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Control parental") },
+        title = { Text(T.controlParental) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (sinPin) {
-                    Text("«$categoryName» está bloqueada y todavía no hay ningún PIN definido.")
+                    Text(T.categoriaBloqueadaSinPin(categoryName))
                     Text(
                         "Ve a Ajustes → Control parental para definirlo.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    Text("Introduce el PIN para abrir «$categoryName».")
+                    Text(T.introduceElPinPara(categoryName))
                     OutlinedTextField(
                         value = pin,
                         onValueChange = { if (it.length <= ParentalControl.MAX_PIN_LENGTH) { pin = it; fallo = false } },
@@ -553,9 +553,9 @@ private fun UnlockPinDialog(
             if (!sinPin) {
                 Button(onClick = {
                     if (ParentalControl.checkPin(pin, expectedPin)) onUnlocked() else fallo = true
-                }) { Text("Desbloquear") }
+                }) { Text(T.desbloquear) }
             }
         },
-        dismissButton = { TextButton(onDismiss) { Text(if (sinPin) "Entendido" else "Cancelar") } },
+        dismissButton = { TextButton(onDismiss) { Text(if (sinPin) "Entendido" else T.cancelar) } },
     )
 }

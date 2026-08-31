@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import com.iptv.family.shared.domain.ParentalControl
+import com.iptv.family.shared.i18n.T
 
 @Composable
 fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
@@ -53,19 +54,19 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text("Ajustes", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(T.ajustes, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        Section("Aspecto") {
-            Text("Tema", style = MaterialTheme.typography.bodyLarge)
+        Section(T.aspecto) {
+            Text(T.tema, style = MaterialTheme.typography.bodyLarge)
             Text(
-                "Claro, oscuro, o sigue la configuración del sistema.",
+                T.temaAyuda,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val themeChoices = listOf(
-                ThemeType.SYSTEM to "Sistema",
-                ThemeType.LIGHT to "Claro",
-                ThemeType.DARK to "Oscuro",
+                ThemeType.SYSTEM to T.temaSistema,
+                ThemeType.LIGHT to T.temaClaro,
+                ThemeType.DARK to T.temaOscuro,
             )
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 themeChoices.forEachIndexed { index, (type, label) ->
@@ -79,14 +80,14 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
             }
         }
 
-        Section("Reproducción") {
+        Section(T.reproduccion) {
             var buffer by remember(settings.bufferMs) { mutableStateOf(settings.bufferMs) }
             Text(
-                "Buffer de red: ${buffer / 1000} s",
+                T.bufferDeRed(buffer / 1000),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                "Súbelo si la imagen se corta a menudo; bájalo si tarda mucho en arrancar.",
+                T.bufferAyuda,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -98,27 +99,26 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
             )
 
             ToggleRow(
-                title = "Modo compatibilidad de vídeo",
-                subtitle = "Actívalo solo si oyes el canal pero la imagen sale en negro. " +
-                    "Consume algo más de procesador.",
+                title = T.modoCompatibilidad,
+                subtitle = T.modoCompatibilidadAyuda,
                 checked = settings.videoCompatibilityMode,
             ) { enabled ->
                 scope.launch { appState.mutateSettings { copy(videoCompatibilityMode = enabled) } }
             }
 
             ToggleRow(
-                title = "Aceleración por hardware",
-                subtitle = "Descarga la decodificación en la gráfica. Desactívala si ves la imagen corrupta.",
+                title = T.aceleracionHardware,
+                subtitle = T.aceleracionAyuda,
                 checked = settings.enableHardwareDecoding,
             ) { enabled ->
                 scope.launch { appState.mutateSettings { copy(enableHardwareDecoding = enabled) } }
             }
         }
 
-        Section("Control parental") {
+        Section(T.controlParental) {
             ToggleRow(
-                title = "Bloquear categorías de adultos",
-                subtitle = "Pide un PIN para abrir categorías con nombres como «adult», «18+» o «xxx»",
+                title = T.bloquearAdultos,
+                subtitle = T.bloquearAdultosAyuda,
                 checked = settings.isParentalLockEnabled,
             ) { enabled ->
                 scope.launch { appState.mutateSettings { copy(isParentalLockEnabled = enabled) } }
@@ -134,8 +134,8 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                     onValueChange = { if (it.length <= ParentalControl.MAX_PIN_LENGTH && it.all(Char::isDigit)) pin = it },
                     label = {
                         Text(
-                            if (settings.parentalPin.isNullOrBlank()) "PIN nuevo (${ParentalControl.MIN_PIN_LENGTH}-${ParentalControl.MAX_PIN_LENGTH} dígitos)"
-                            else "Cambiar PIN (déjalo vacío para no tocarlo)"
+                            if (settings.parentalPin.isNullOrBlank()) T.pinNuevo(ParentalControl.MIN_PIN_LENGTH, ParentalControl.MAX_PIN_LENGTH)
+                            else T.cambiarPin
                         )
                     },
                     singleLine = true,
@@ -151,27 +151,26 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                         pin = ""
                     },
                     enabled = settings.isParentalLockEnabled && pinValido,
-                ) { Text("Guardar PIN") }
+                ) { Text(T.guardarPin) }
                 if (!settings.parentalPin.isNullOrBlank()) {
                     TextButton(
                         onClick = { scope.launch { appState.mutateSettings { copy(parentalPin = null) } } },
-                    ) { Text("Quitar") }
+                    ) { Text(T.quitar) }
                 }
             }
             if (settings.isParentalLockEnabled && settings.parentalPin.isNullOrBlank()) {
                 Text(
-                    "Sin PIN guardado el bloqueo no se puede abrir. Guarda uno.",
+                    T.sinPinGuardado,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
         }
 
-        Section("Servidor web") {
+        Section(T.servidorWeb) {
             ToggleRow(
-                title = "Activar servidor web",
-                subtitle = "Permite ver y cambiar de canal desde el navegador de cualquier dispositivo " +
-                    "de tu red (o de internet, exponiendo el puerto con algo como ngrok).",
+                title = T.activarServidorWeb,
+                subtitle = T.servidorWebAyuda,
                 checked = settings.enableWebServer,
             ) { enabled ->
                 scope.launch { appState.mutateSettings { copy(enableWebServer = enabled) } }
@@ -182,27 +181,22 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                 OutlinedTextField(
                     value = portText,
                     onValueChange = { if (it.length <= 5 && it.all(Char::isDigit)) portText = it },
-                    label = { Text("Puerto") },
+                    label = { Text(T.puerto) },
                     singleLine = true,
                     modifier = Modifier.width(140.dp),
                 )
                 Button(onClick = {
                     val port = portText.toIntOrNull()?.coerceIn(1024, 65535) ?: settings.webServerPort
                     scope.launch { appState.mutateSettings { copy(webServerPort = port) } }
-                }) { Text("Guardar puerto") }
+                }) { Text(T.guardarPuerto) }
             }
 
             if (settings.enableWebServer) {
                 WebUsersBlock(appState, scope)
 
                 ToggleRow(
-                    title = "Arreglar el audio para el navegador",
-                    subtitle = "Dos problemas que solo afectan a la web. Uno: muchos canales emiten en " +
-                        "AC-3 o MP2, que ningun navegador puede reproducir (en esta app si se oye). " +
-                        "Dos: cuando un canal trae varios idiomas dentro del mismo flujo, el navegador " +
-                        "se queda con el primero — que suele ser la audiodescripcion — sin poder elegir. " +
-                        "Con esto ffmpeg escoge la pista en español y, solo si hace falta, la convierte " +
-                        "a AAC. El video se copia tal cual en ambos casos.",
+                    title = T.arreglarAudioNavegador,
+                    subtitle = T.audioNavegadorAyuda,
                     checked = settings.transcodeAudioForWeb,
                 ) { enabled ->
                     scope.launch { appState.mutateSettings { copy(transcodeAudioForWeb = enabled) } }
@@ -210,9 +204,8 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                 if (settings.transcodeAudioForWeb) {
                     val ffmpegFound = remember { AudioTranscoder.resolveFfmpeg(settings.ffmpegPath) }
                     Text(
-                        if (ffmpegFound != null) "ffmpeg encontrado: $ffmpegFound"
-                        else "No se encuentra ffmpeg. Instalalo (winget install Gyan.FFmpeg) o indica su ruta abajo; " +
-                            "sin el, esos canales seguiran sin sonido en la web.",
+                        if (ffmpegFound != null) T.ffmpegEncontrado(ffmpegFound)
+                        else T.ffmpegNoEncontrado,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (ffmpegFound != null) MaterialTheme.colorScheme.onSurfaceVariant
                         else MaterialTheme.colorScheme.error,
@@ -222,7 +215,7 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                         OutlinedTextField(
                             value = ffmpegText,
                             onValueChange = { ffmpegText = it },
-                            label = { Text("Ruta a ffmpeg (opcional)") },
+                            label = { Text(T.rutaFfmpeg) },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
@@ -230,13 +223,13 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                             scope.launch {
                                 appState.mutateSettings { copy(ffmpegPath = ffmpegText.trim().ifBlank { null }) }
                             }
-                        }) { Text("Guardar") }
+                        }) { Text(T.guardar) }
                     }
                 }
 
                 val lanIps = remember { localLanAddresses() }
                 Text(
-                    "Direcciones para abrir la web (cada persona entra con su usuario y contrasena):",
+                    T.direccionesWeb,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -244,17 +237,17 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                     Text("http://$ip:${settings.webServerPort}", style = MaterialTheme.typography.bodyLarge)
                 }
                 Text(
-                    "Para verlo fuera de casa: ngrok http ${settings.webServerPort}",
+                    T.paraVerloFuera(settings.webServerPort),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        Section("Información") {
-            InfoRow("Motor de vídeo", if (VlcNative.isAvailable) "libvlc detectado" else "no encontrado")
-            InfoRow("Datos guardados en", "${System.getProperty("user.home")}/.iptv-family")
-            InfoRow("Versión", "1.0.0")
+        Section(T.informacion) {
+            InfoRow(T.motorDeVideo, if (VlcNative.isAvailable) T.libvlcDetectado else T.noEncontrado)
+            InfoRow(T.datosGuardadosEn, "${System.getProperty("user.home")}/.iptv-family")
+            InfoRow(T.version, "1.0.0")
         }
     }
 }
@@ -318,12 +311,11 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Usuarios de la web", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(T.usuariosDeLaWeb, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
         if (users.isEmpty()) {
             Text(
-                "Todavia no hay ninguna cuenta. Crea la primera (sera administradora) aqui o " +
-                    "desde la propia web, que al abrirla sin cuentas pide crearla.",
+                T.sinCuentasWeb,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -334,13 +326,13 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
                 Column(Modifier.weight(1f)) {
                     Text(user.username, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        if (user.role == WebRole.ADMIN) "Administrador — control total"
-                        else "Invitado — solo ve el canal que pongas tu",
+                        if (user.role == WebRole.ADMIN) T.rolAdministrador
+                        else T.rolInvitado,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton({ changingFor = user.username; changePass = "" }) { Text("Contrasena") }
+                TextButton({ changingFor = user.username; changePass = "" }) { Text(T.contrasena) }
                 // No se deja borrar al ultimo administrador: nadie podria volver a
                 // gestionar usuarios sin editar el fichero de ajustes a mano.
                 val isLastAdmin = user.role == WebRole.ADMIN && users.count { it.role == WebRole.ADMIN } <= 1
@@ -351,9 +343,9 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
                             appState.mutateSettings { copy(webUsers = webUsers.filterNot { it.username == user.username }) }
                         }
                         RemoteAuth.revokeSessionsOf(user.username)
-                        message = "Cuenta '${user.username}' eliminada."
+                        message = T.cuentaEliminada(user.username)
                     },
-                ) { Text("Borrar") }
+                ) { Text(T.borrar) }
             }
 
             if (changingFor == user.username) {
@@ -361,7 +353,7 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
                     OutlinedTextField(
                         value = changePass,
                         onValueChange = { changePass = it },
-                        label = { Text("Contrasena nueva") },
+                        label = { Text(T.contrasenaNueva) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.weight(1f),
@@ -378,27 +370,27 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
                             // Cambiar la contrasena echa a quien siguiera con la vieja.
                             RemoteAuth.revokeSessionsOf(user.username)
                             changingFor = null
-                            message = "Contrasena de '${user.username}' cambiada."
+                            message = T.contrasenaCambiada(user.username)
                         },
-                    ) { Text("Cambiar") }
-                    TextButton({ changingFor = null }) { Text("Cancelar") }
+                    ) { Text(T.cambiar) }
+                    TextButton({ changingFor = null }) { Text(T.cancelar) }
                 }
             }
         }
 
-        Text("Anadir cuenta", style = MaterialTheme.typography.labelLarge)
+        Text(T.anadirCuenta, style = MaterialTheme.typography.labelLarge)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = newName,
                 onValueChange = { newName = it },
-                label = { Text("Usuario") },
+                label = { Text(T.usuario) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             OutlinedTextField(
                 value = newPass,
                 onValueChange = { newPass = it },
-                label = { Text("Contrasena") },
+                label = { Text(T.contrasena) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.weight(1f),
@@ -407,7 +399,7 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = newIsAdmin, onCheckedChange = { newIsAdmin = it })
             Text(
-                if (newIsAdmin) "Administrador" else "Invitado (solo ver)",
+                if (newIsAdmin) T.rolAdministradorCorto else T.rolInvitadoCorto,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -416,7 +408,7 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
                 onClick = {
                     val name = newName.trim()
                     if (users.any { it.username.equals(name, ignoreCase = true) }) {
-                        message = "Ya existe una cuenta con ese nombre."
+                        message = T.nombreYaExiste
                         return@Button
                     }
                     val user = PasswordHasher.createUser(
@@ -424,13 +416,12 @@ private fun WebUsersBlock(appState: AppState, scope: CoroutineScope) {
                     )
                     scope.launch { appState.mutateSettings { copy(webUsers = webUsers + user) } }
                     newName = ""; newPass = ""; newIsAdmin = false
-                    message = "Cuenta '$name' creada."
+                    message = T.cuentaCreada(name)
                 },
-            ) { Text("Crear") }
+            ) { Text(T.crear) }
         }
         Text(
-            "La contrasena debe tener al menos $MIN_PASSWORD_LEN caracteres. No se guarda tal cual: " +
-                "se guarda su hash, asi que no se puede recuperar (solo cambiar).",
+            T.contrasenaMinima(MIN_PASSWORD_LEN),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

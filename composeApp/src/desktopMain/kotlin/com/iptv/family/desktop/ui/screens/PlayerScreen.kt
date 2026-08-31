@@ -57,6 +57,7 @@ import com.iptv.family.desktop.player.VlcNative
 import com.iptv.family.desktop.remote.LocalMuxKey
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.shared.model.Channel
+import com.iptv.family.shared.i18n.T
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 
@@ -92,7 +93,7 @@ fun PlayerScreen(
         // Si el servidor web esta activo, VLC consume el canal a traves del
         // multiplexor local (`/stream/current.m3u8`): hacia el proveedor hay
         // UNA sola conexion aunque VLC y los navegadores remotos lo vean a la
-        // vez (paneles limitados a "1 conexion por cuenta" patean la 2a sesion).
+        // vez (paneles limitados a T.unaConexionPorCuenta patean la 2a sesion).
         // url (origen) sigue siendo la identidad del canal para zapeo/EPG/web;
         // el proxy la lee de controller.currentUrl.
         fun muxUrl(): String? {
@@ -268,10 +269,10 @@ private fun ControlBar(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         IconButton(onBack) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver a la lista")
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = T.volverALaLista)
         }
         IconButton(onPrev) {
-            Icon(Icons.Rounded.SkipPrevious, contentDescription = "Canal anterior")
+            Icon(Icons.Rounded.SkipPrevious, contentDescription = T.canalAnterior)
         }
         IconButton({ controller.togglePlayPause() }) {
             Icon(
@@ -281,10 +282,10 @@ private fun ControlBar(
             )
         }
         IconButton(onNext) {
-            Icon(Icons.Rounded.SkipNext, contentDescription = "Canal siguiente")
+            Icon(Icons.Rounded.SkipNext, contentDescription = T.canalSiguiente)
         }
         IconButton({ controller.stop() }) {
-            Icon(Icons.Rounded.Stop, contentDescription = "Detener")
+            Icon(Icons.Rounded.Stop, contentDescription = T.detener)
         }
 
         Spacer(Modifier.width(8.dp))
@@ -310,8 +311,8 @@ private fun ControlBar(
                 when {
                     controller.error != null -> "Error"
                     controller.isBuffering -> "Cargando…"
-                    controller.isPlaying -> "En directo · ${appState.groupName(channel) ?: "Sin grupo"}"
-                    else -> "En pausa"
+                    controller.isPlaying -> "En directo · ${appState.groupName(channel) ?: T.sinGrupo}"
+                    else -> T.enPausa
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -342,7 +343,7 @@ private fun ControlBar(
         IconButton({ controller.changeMuted(!controller.isMuted) }) {
             Icon(
                 if (controller.isMuted || controller.volume == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
-                contentDescription = if (controller.isMuted) "Quitar silencio" else "Silenciar",
+                contentDescription = if (controller.isMuted) T.quitarSilencio else T.silenciar,
             )
         }
         Slider(
@@ -355,7 +356,7 @@ private fun ControlBar(
         IconButton(onToggleFullscreen) {
             Icon(
                 if (isFullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                contentDescription = if (isFullscreen) "Salir de pantalla completa" else "Pantalla completa",
+                contentDescription = if (isFullscreen) T.salirPantallaCompleta else T.pantallaCompleta,
             )
         }
     }
@@ -379,11 +380,11 @@ private fun AudioTrackSelector(controller: VlcController) {
         TextButton(onClick = { expanded = true }) {
             Icon(
                 Icons.Rounded.Translate,
-                contentDescription = "Idioma del audio",
+                contentDescription = T.idiomaDelAudio,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(6.dp))
-            Text("Audio", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            Text(T.audio, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             tracks.forEach { track ->
@@ -391,7 +392,7 @@ private fun AudioTrackSelector(controller: VlcController) {
                     text = { Text(track.label) },
                     leadingIcon = {
                         if (track.id == controller.currentAudioTrackId) {
-                            Icon(Icons.Rounded.Check, contentDescription = "Seleccionado")
+                            Icon(Icons.Rounded.Check, contentDescription = T.seleccionado)
                         }
                     },
                     onClick = {
@@ -412,15 +413,14 @@ private fun MissingVlcNotice() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "No se encontró el motor de vídeo (libvlc)",
+            T.sinMotorDeVideo,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "El instalador de IPTV Family lo incluye. Si estás ejecutando desde el " +
-                "código fuente, instala VLC en el sistema y reinicia la aplicación.",
+            T.sinMotorDeVideoAyuda,
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFFB0B8C8),
             textAlign = TextAlign.Center,

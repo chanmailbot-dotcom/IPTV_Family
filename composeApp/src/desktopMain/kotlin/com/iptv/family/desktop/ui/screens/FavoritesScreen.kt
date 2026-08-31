@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.shared.model.Channel
+import com.iptv.family.shared.i18n.T
 import kotlinx.coroutines.CoroutineScope
 
 @Composable
@@ -43,9 +44,9 @@ fun FavoritesScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(40.dp),
                 )
-                Text("Todavía no hay favoritos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(T.sinFavoritosTitulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Pulsa el corazón en cualquier canal para tenerlo siempre a mano aquí.",
+                    T.sinFavoritosAyuda,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -55,9 +56,9 @@ fun FavoritesScreen(
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text("Favoritos", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(T.favoritos, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
-            "${favorites.size} canales guardados",
+            T.canalesGuardados(favorites.size),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 10.dp),

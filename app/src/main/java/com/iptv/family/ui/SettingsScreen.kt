@@ -16,9 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.iptv.family.state.AppState
+import com.iptv.family.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.iptv.family.shared.domain.ParentalControl
+import com.iptv.family.shared.i18n.T
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -37,7 +39,7 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
     var showPinDialog by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Ajustes", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(T.ajustes, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
         Column(
             Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large).padding(18.dp),
@@ -45,9 +47,9 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Bloquear categorías de adultos", style = MaterialTheme.typography.bodyLarge)
+                    Text(T.bloquearAdultos, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Pide un PIN para abrir categorías con nombres como «adult», «18+» o «xxx»",
+                        T.bloquearAdultosAyuda,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -66,8 +68,7 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
 
                 if (!tienePin) {
                     Text(
-                        "Falta definir el PIN. Sin él, las categorías de adultos quedarían " +
-                            "bloqueadas sin forma de abrirlas.",
+                        T.faltaDefinirPin,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -80,7 +81,7 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
                     if (tienePin) {
                         TextButton(onClick = {
                             scope.launch { appState.mutateSettings { copy(parentalPin = null) } }
-                        }) { Text("Quitar PIN") }
+                        }) { Text(T.quitarPin) }
                     }
                 }
             }
@@ -90,8 +91,17 @@ fun SettingsScreen(appState: AppState, scope: CoroutineScope) {
             Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("Información", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text("Versión 1.0.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                T.informacion,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                T.versionNumero(BuildConfig.VERSION_NAME),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 
@@ -123,15 +133,15 @@ private fun SetPinDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     val coincide = pin.isNotEmpty() && pin == repe
     val error = when {
         pin.isEmpty() -> null
-        !soloDigitos -> "El PIN debe ser solo numeros: en el mando no hay letras."
+        !soloDigitos -> T.pinSoloNumeros
         !largoOk -> "Entre ${ParentalControl.MIN_PIN_LENGTH} y ${ParentalControl.MAX_PIN_LENGTH} digitos."
-        repe.isNotEmpty() && !coincide -> "Los dos PIN no coinciden."
+        repe.isNotEmpty() && !coincide -> T.pinNoCoincide
         else -> null
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("PIN del control parental") },
+        title = { Text(T.pinDelControlParental) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -145,7 +155,7 @@ private fun SetPinDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
                 OutlinedTextField(
                     value = repe,
                     onValueChange = { if (it.length <= ParentalControl.MAX_PIN_LENGTH) repe = it },
-                    label = { Text("Repite el PIN") },
+                    label = { Text(T.repiteElPin) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -159,8 +169,8 @@ private fun SetPinDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
             Button(
                 onClick = { onConfirm(pin) },
                 enabled = soloDigitos && largoOk && coincide,
-            ) { Text("Guardar") }
+            ) { Text(T.guardar) }
         },
-        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+        dismissButton = { TextButton(onDismiss) { Text(T.cancelar) } },
     )
 }

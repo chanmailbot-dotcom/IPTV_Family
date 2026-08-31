@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.iptv.family.desktop.state.AppState
 import com.iptv.family.desktop.ui.ChannelLogo
 import com.iptv.family.shared.model.Channel
+import com.iptv.family.shared.i18n.T
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -107,7 +108,7 @@ fun ChannelRow(
                         program != null -> "Ahora: ${program.title}"
                         // groupName y no channel.group: este ultimo es el id de
                         // categoria y en Xtream se veia un numero suelto.
-                        else -> appState.groupName(channel) ?: "Sin grupo"
+                        else -> appState.groupName(channel) ?: T.sinGrupo
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (program != null) MaterialTheme.colorScheme.primary
@@ -123,7 +124,7 @@ fun ChannelRow(
         ) {
             Icon(
                 if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                contentDescription = if (fav) "Quitar de favoritos" else "Añadir a favoritos",
+                contentDescription = if (fav) T.quitarDeFavoritos else T.anadirAFavoritos,
                 tint = if (fav) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(if (compact) 18.dp else 20.dp),
             )
@@ -133,7 +134,7 @@ fun ChannelRow(
             IconButton(onClick = { onChannelClick(channel) }, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Icons.Rounded.PlayArrow,
-                    contentDescription = "Reproducir ${channel.name}",
+                    contentDescription = T.reproducirCanal(channel.name),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

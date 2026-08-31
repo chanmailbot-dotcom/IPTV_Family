@@ -114,13 +114,13 @@ fun ChannelsScreen(
     if (appState.selectedPlaylist == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("No hay ninguna lista abierta", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(T.sinListaAbierta, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Ve a «Mis listas» y añade o selecciona una.",
+                    T.veAMisListas,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onGoHome) { Text("Ir a mis listas") }
+                Button(onGoHome) { Text(T.irAMisListas) }
             }
         }
         return
@@ -132,9 +132,13 @@ fun ChannelsScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("No se pudo cargar la lista", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    T.noSePudoCargarLaLista,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                Button(onGoHome) { Text("Volver a mis listas") }
+                Button(onGoHome) { Text(T.volverAMisListas) }
             }
         }
         return
@@ -233,7 +237,7 @@ fun ChannelsScreen(
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton({ scope.launch { appState.refresh() } }) { Text("Reintentar") }
+                    TextButton({ scope.launch { appState.refresh() } }) { Text(T.reintentar) }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -247,7 +251,9 @@ fun ChannelsScreen(
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 trailingIcon = {
                     if (search.isNotEmpty()) {
-                        IconButton({ search = "" }) { Icon(Icons.Rounded.Clear, contentDescription = "Limpiar búsqueda") }
+                        IconButton({ search = "" }) {
+                            Icon(Icons.Rounded.Clear, contentDescription = T.limpiarBusqueda)
+                        }
                     }
                 },
             )
@@ -285,7 +291,7 @@ fun ChannelsScreen(
             if (channels.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (search.isBlank()) "Esta categoría está vacía." else "Ningún canal coincide con «$search».",
+                        if (search.isBlank()) T.categoriaVacia else T.ningunCanalCoincide(search),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -363,7 +369,7 @@ private fun EpisodesDialog(
         runCatching { appState.loadSeriesEpisodes(series.id) }
             .onSuccess { episodes = it }
             .onFailure {
-                error = it.message ?: "No se pudieron cargar los episodios."
+                error = it.message ?: T.episodiosNoCargados
                 episodes = emptyList()
             }
     }
@@ -380,7 +386,7 @@ private fun EpisodesDialog(
                 ) { CircularProgressIndicator() }
 
                 list.isEmpty() -> Text(
-                    error ?: "Esta serie no tiene episodios disponibles.",
+                    error ?: T.serieSinEpisodios,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
@@ -404,7 +410,7 @@ private fun EpisodesDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onDismiss) { Text("Cerrar") } },
+        confirmButton = { TextButton(onDismiss) { Text(T.cerrar) } },
     )
 }
 
@@ -462,7 +468,7 @@ private fun CategoryDropdown(
                             if (isLocked(category)) {
                                 Icon(
                                     Icons.Rounded.Lock,
-                                    contentDescription = "Bloqueada",
+                                    contentDescription = T.bloqueada,
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
@@ -533,7 +539,7 @@ private fun CategorySidebar(
                     if (isLocked(category)) {
                         Icon(
                             Icons.Rounded.Lock,
-                            contentDescription = "Bloqueada por control parental",
+                            contentDescription = T.bloqueadaPorControlParental,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp),
                         )
@@ -557,10 +563,10 @@ private fun PinDialog(expectedPin: String?, onDismiss: () -> Unit, onUnlocked: (
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Control parental") },
+        title = { Text(T.controlParental) },
         text = {
             Column {
-                Text("Introduce el PIN para ver esta categoría.")
+                Text(T.introduceElPin)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = pin,
@@ -581,10 +587,10 @@ private fun PinDialog(expectedPin: String?, onDismiss: () -> Unit, onUnlocked: (
         },
         confirmButton = {
             Button({ if (ParentalControl.checkPin(pin, expectedPin)) onUnlocked() else wrong = true }) {
-                Text("Desbloquear")
+                Text(T.desbloquear)
             }
         },
-        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+        dismissButton = { TextButton(onDismiss) { Text(T.cancelar) } },
     )
 }
 

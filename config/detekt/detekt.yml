@@ -32,6 +32,11 @@ complexity:
     thresholdInClasses: 30
     thresholdInFiles: 40
     ignoreAnnotatedFunctions: ['Composable']
+    # El catalogo de textos es, por definicion, una lista larga: una entrada por
+    # cadena de la interfaz. Partirlo en trozos para bajar de un umbral no
+    # mejoraria nada y romperia lo que lo hace util, que es tenerlo todo junto y
+    # que el compilador obligue a traducir cada entrada en los dos idiomas.
+    excludes: ['**/i18n/**']
   CyclomaticComplexMethod:
     active: true
     threshold: 20

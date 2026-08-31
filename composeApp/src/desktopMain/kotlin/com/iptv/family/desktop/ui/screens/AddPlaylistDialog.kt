@@ -1,6 +1,7 @@
 package com.iptv.family.desktop.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import com.iptv.family.shared.i18n.T
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,7 +69,7 @@ fun AddPlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Añadir lista") },
+        title = { Text(T.añadirLista) },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -85,8 +86,8 @@ fun AddPlaylistDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nombre de la lista") },
-                    placeholder = { Text("Ej. Casa") },
+                    label = { Text(T.nombreDeLaLista) },
+                    placeholder = { Text(T.ejemploNombreLista) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -95,7 +96,7 @@ fun AddPlaylistDialog(
                     AddMode.URL_M3U -> OutlinedTextField(
                         value = url,
                         onValueChange = { url = it },
-                        label = { Text("URL de la lista") },
+                        label = { Text(T.urlDeLaLista) },
                         placeholder = { Text("http://servidor.com/lista.m3u") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -105,7 +106,7 @@ fun AddPlaylistDialog(
                         OutlinedTextField(
                             value = url,
                             onValueChange = { url = it },
-                            label = { Text("URL del panel") },
+                            label = { Text(T.urlDelPanel) },
                             placeholder = { Text("http://servidor.com:8080") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -113,14 +114,14 @@ fun AddPlaylistDialog(
                         OutlinedTextField(
                             value = user,
                             onValueChange = { user = it },
-                            label = { Text("Usuario") },
+                            label = { Text(T.usuario) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         OutlinedTextField(
                             value = pass,
                             onValueChange = { pass = it },
-                            label = { Text("Contraseña") },
+                            label = { Text(T.contrasena) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
@@ -142,7 +143,7 @@ fun AddPlaylistDialog(
                                             fileContent = text
                                             if (name.isBlank()) name = File(path).nameWithoutExtension
                                         },
-                                        onFailure = { fileError = "No se pudo leer el archivo: ${it.message}" },
+                                        onFailure = { fileError = T.noSePudoLeerElArchivo(it.message.orEmpty()) },
                                     )
                                 }
                             },
@@ -150,7 +151,7 @@ fun AddPlaylistDialog(
                         ) {
                             Icon(Icons.Rounded.Folder, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Elegir archivo .m3u")
+                            Text(T.elegirArchivoM3u)
                         }
                         filePath?.let { path ->
                             // El contenido se captura en un local: es estado de
@@ -181,10 +182,10 @@ fun AddPlaylistDialog(
                     OutlinedTextField(
                         value = epgUrl,
                         onValueChange = { epgUrl = it },
-                        label = { Text("Guía EPG (XMLTV) — opcional") },
+                        label = { Text(T.guiaEpgOpcional) },
                         placeholder = {
                             Text(
-                                if (mode == AddMode.XTREAM) "Déjalo vacío: se toma del propio panel"
+                                if (mode == AddMode.XTREAM) T.urlVacioSeToma
                                 else "http://…/xmltv.php"
                             )
                         },
@@ -194,9 +195,9 @@ fun AddPlaylistDialog(
                 }
                 Text(
                     when (mode) {
-                        AddMode.URL_M3U -> "La URL que te dio tu proveedor, normalmente acaba en .m3u o .m3u8."
-                        AddMode.XTREAM -> "Los tres datos del panel de tu proveedor. No añadas /player_api.php."
-                        AddMode.FILE -> "Un archivo .m3u que ya tengas guardado en el ordenador."
+                        AddMode.URL_M3U -> T.ayudaM3uUrl
+                        AddMode.XTREAM -> T.ayudaXtream
+                        AddMode.FILE -> T.ayudaM3uArchivo
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -214,8 +215,8 @@ fun AddPlaylistDialog(
                     onDismiss()
                 },
                 enabled = canSave,
-            ) { Text("Guardar y cargar") }
+            ) { Text(T.guardarYCargar) }
         },
-        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+        dismissButton = { TextButton(onDismiss) { Text(T.cancelar) } },
     )
 }

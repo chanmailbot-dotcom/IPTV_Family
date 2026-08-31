@@ -94,6 +94,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Para leer la version real en la pantalla de Ajustes. Estaba escrita a
+        // mano («Versión 1.0.0») y ya mentia: la version del proyecto es otra.
+        buildConfig = true
     }
 
     packagingOptions {

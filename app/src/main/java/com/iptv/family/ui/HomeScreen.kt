@@ -41,10 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.iptv.family.shared.i18n.T
 import com.iptv.family.state.AppState
 import com.iptv.family.shared.model.Playlist
 import com.iptv.family.shared.model.SourceType
+import com.iptv.family.shared.i18n.T
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.text.KeyboardOptions
@@ -197,7 +197,7 @@ private fun PlaylistRow(
                 .clickable(onClick = onDelete)
                 .padding(14.dp),
         ) {
-            Icon(Icons.Rounded.Delete, contentDescription = "Eliminar")
+            Icon(Icons.Rounded.Delete, contentDescription = T.eliminar)
         }
     }
 }
