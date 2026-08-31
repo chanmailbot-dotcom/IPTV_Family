@@ -1,0 +1,145 @@
+# Configuracion de detekt para IPTV Family.
+#
+# Parte de las reglas por defecto y ajusta lo que en ESTE proyecto seria ruido.
+# Cada desactivacion lleva su motivo: una regla apagada "porque molesta" y sin
+# explicar acaba desactivando por costumbre las que si importan.
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+complexity:
+  active: true
+  # Una funcion @Composable de pantalla es larga por naturaleza: describe un
+  # arbol de interfaz, no una secuencia de decisiones. Se sube el umbral en vez
+  # de partir pantallas en trozos artificiales que solo se usan una vez.
+  LongMethod:
+    active: true
+    threshold: 120
+  LongParameterList:
+    active: true
+    functionThreshold: 9
+    constructorThreshold: 9
+    # Los composables reciben sus datos y sus callbacks por parametro: es como
+    # se declaran las dependencias de una pantalla.
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    active: true
+    thresholdInClasses: 30
+    thresholdInFiles: 40
+    ignoreAnnotatedFunctions: ['Composable']
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 20
+  NestedBlockDepth:
+    active: true
+    threshold: 6
+
+style:
+  active: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+  MagicNumber:
+    # En interfaz, los numeros SON el diseño: 12.dp, 0.5f, 4000 ms. Extraerlos a
+    # constantes con nombre no aclara nada y aleja el valor de donde se usa.
+    active: false
+  ReturnCount:
+    active: true
+    max: 6
+  ForbiddenComment:
+    # No se prohiben TODO/FIXME: es mejor que una tarea pendiente este escrita en
+    # el codigo que en la cabeza de alguien.
+    active: false
+  UnusedPrivateMember:
+    active: true
+  WildcardImport:
+    active: true
+  DestructuringDeclarationWithTooManyEntries:
+    active: false
+
+naming:
+  active: true
+  # El codigo de este proyecto esta escrito en castellano, comentarios e
+  # identificadores incluidos, y eso incluye eñes y tildes. Las expresiones por
+  # defecto solo admiten ASCII, asi que `añadirLista` seria un error de estilo.
+  FunctionNaming:
+    active: true
+    # Admite las dos formas a proposito: las funciones normales van en
+    # minuscula, y las @Composable en mayuscula, que es la convencion de Compose
+    # (una pantalla se lee como un tipo, no como una accion). `ignoreAnnotated`
+    # no basta: sin resolucion de tipos, detekt no siempre ve la anotacion.
+    functionPattern: '[a-zA-ZáéíóúñüÁÉÍÓÚÑÜ][\p{L}\p{N}]*'
+    # En las pruebas el nombre es una frase con guiones bajos --
+    # `deleting_a_playlist_also_deletes_its_saved_catalogue` -- porque ahi el
+    # nombre ES la documentacion de lo que se garantiza. Es deliberado.
+    excludes: ['**/desktopTest/**', '**/test/**', '**/androidTest/**', '**/commonTest/**']
+  VariableNaming:
+    active: true
+    variablePattern: '[a-záéíóúñü][\p{L}\p{N}]*'
+    privateVariablePattern: '(_)?[a-záéíóúñü][\p{L}\p{N}]*'
+  ObjectPropertyNaming:
+    active: true
+    constantPattern: '[A-ZÁÉÍÓÚÑÜ][_A-ZÁÉÍÓÚÑÜ0-9]*'
+    # Una constante que es una coleccion (`private val SPANISH = setOf(...)`) no
+    # puede declararse `const`, pero sigue siendo una constante y se escribe en
+    # mayusculas: es la convencion de Kotlin, y detekt la trata como propiedad.
+    propertyPattern: '[a-záéíóúñüA-ZÁÉÍÓÚÑÜ][_\p{L}\p{N}]*'
+    privatePropertyPattern: '(_)?[a-záéíóúñüA-ZÁÉÍÓÚÑÜ][_\p{L}\p{N}]*'
+  MemberNameEqualsClassName:
+    active: false
+  TopLevelPropertyNaming:
+    active: true
+    constantPattern: '[A-ZÁÉÍÓÚÑÜ][_A-ZÁÉÍÓÚÑÜ0-9]*'
+    propertyPattern: '[A-Za-záéíóúñü][_\p{L}\p{N}]*'
+    # Mismo caso: `private val ANCHO_MINIMO_PARA_COLUMNA = 820.dp` es una
+    # constante, aunque el tipo (Dp) no admita `const`.
+    privatePropertyPattern: '_?[a-záéíóúñüA-ZÁÉÍÓÚÑÜ][_\p{L}\p{N}]*'
+
+exceptions:
+  active: true
+  TooGenericExceptionCaught:
+    # Al hablar con un proveedor de IPTV cualquier cosa puede fallar de
+    # cualquier manera, y la aplicacion tiene que seguir de pie: capturar
+    # Exception y dejarlo en el log es aqui la respuesta correcta.
+    active: false
+  SwallowedException:
+    active: false
+  TooGenericExceptionThrown:
+    active: true
+
+potential-bugs:
+  active: true
+  # OJO: este analisis corre SIN resolucion de tipos (no se le pasa el classpath
+  # de compilacion). Comprobado: un `a!!` sobre un nulable NO se detecta. Las
+  # reglas que dependen de los tipos se dejan apagadas explicitamente en vez de
+  # aparentar que vigilan algo.
+  #
+  # Lo que si funciona, y esta comprobado que salta con codigo nuevo, es todo lo
+  # estructural: complejidad, tamaño, nombres, excepciones genericas, bloques
+  # vacios y codigo inalcanzable.
+  UnsafeCallOnNullableType:
+    active: false
+  UnnecessaryNotNullOperator:
+    active: false
+  UnreachableCode:
+    active: true
+
+empty-blocks:
+  active: true
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true
+
+comments:
+  active: true
+  UndocumentedPublicClass:
+    active: false
+  UndocumentedPublicFunction:
+    active: false
+  UndocumentedPublicProperty:
+    active: false

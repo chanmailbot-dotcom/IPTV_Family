@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -21,10 +23,48 @@ android {
         }
     }
 
+    /**
+     * Firma de release.
+     *
+     * Hasta ahora el APK que se instalaba en el Fire TV era el de DEPURACION,
+     * firmado con la clave de desarrollo que genera el SDK. Eso vale para
+     * probar, pero no para repartirlo: esa clave la tiene cualquiera, va sin
+     * optimizar y Android trata las actualizaciones firmadas con otra clave como
+     * una aplicacion distinta -- es decir, la primera actualizacion "de verdad"
+     * obligaria a desinstalar y perder los datos.
+     *
+     * Las credenciales NO viven en el repositorio: se leen del entorno (asi las
+     * pone el CI desde los secretos del proyecto) o de un `keystore.properties`
+     * local que esta en .gitignore. Si no hay ninguna, no se define la firma y
+     * `assembleRelease` no se intenta: es preferible a generar un APK que
+     * parezca publicable y no lo sea.
+     */
+    val propiedadesFirma = rootProject.file("keystore.properties")
+    val firmaDisponible = propiedadesFirma.exists() || System.getenv("ANDROID_KEYSTORE_BASE64") != null
+
+    signingConfigs {
+        if (firmaDisponible) {
+            create("release") {
+                val props = Properties().apply {
+                    if (propiedadesFirma.exists()) propiedadesFirma.inputStream().use { load(it) }
+                }
+                fun valor(clave: String, entorno: String): String? =
+                    props.getProperty(clave) ?: System.getenv(entorno)
+
+                val ruta = valor("storeFile", "ANDROID_KEYSTORE_FILE")
+                if (ruta != null) storeFile = file(ruta)
+                storePassword = valor("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = valor("keyAlias", "ANDROID_KEY_ALIAS")
+                keyPassword = valor("keyPassword", "ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (firmaDisponible) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

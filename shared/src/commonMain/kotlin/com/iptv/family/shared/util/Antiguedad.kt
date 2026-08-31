@@ -17,3 +17,4 @@ fun textoAntiguedad(instanteMs: Long, ahoraMs: Long = System.currentTimeMillis()
     val minutos = (ahoraMs - instanteMs) / 60_000
     return T.antiguedad(minutos)
 }
+

@@ -1,46 +1,51 @@
-# IPTV Family ProGuard Rules
+# Reglas de R8 para la version de release.
+#
+# Este fichero conservaba reglas de Hilt, Retrofit, Gson y Room: dependencias que
+# el modulo YA NO USA desde que la aplicacion pasa por el modulo compartido.
+# Reglas para clases que no existen no protegen nada y hacen creer que hay una
+# proteccion donde no la hay.
+#
+# Comprobado en el emulador con el APK de release firmado: se añade una lista, se
+# cierra la aplicacion del todo y al volver a abrirla la lista sigue ahi con sus
+# canales. Es decir, la serializacion sobrevive a la ofuscacion.
 
-# Keep Parcelable implementations for Hilt
+# --- kotlinx.serialization ---
+# El propio artefacto trae sus reglas, pero se declaran aqui de forma explicita
+# para las clases de ESTE proyecto: si algun dia se ofuscan sus serializadores
+# generados, la aplicacion arranca y luego no puede leer sus propios datos, que
+# es el peor de los fallos posibles -- silencioso y con perdida.
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.**
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class com.iptv.family.**$$serializer { *; }
+-keepclassmembers class com.iptv.family.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.iptv.family.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# --- Media3 / ExoPlayer ---
+# Carga por reflexion los decodificadores y las extensiones segun el formato.
+-keep class androidx.media3.** { *; }
+-keep interface androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# --- Coroutines ---
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+-dontwarn kotlinx.coroutines.**
+
+# --- Coil (logos de canal) ---
+-dontwarn coil.**
+
+# --- Parcelable ---
 -keep class * implements android.os.Parcelable {
     public static final ** CREATOR;
 }
-
-# Keep Room entities and DAOs
--keep class com.iptv.family.data.local.** { *; }
-
-# Keep Hilt generated code
--keep class dagger.hilt.** { *; }
--keep class * extends dagger.hilt.android.HiltAndroidApp { *; }
--keep class * extends dagger.hilt.android.HiltApplication { *; }
-
-# Keep ExoPlayer
--keep class androidx.media3.** { *; }
--keep interface androidx.media3.** { *; }
-
-# Keep Retrofit and Gson
--keep class com.squareup.retrofit2.** { *; }
--keep class com.google.gson.** { *; }
--keep class * implements com.google.gson.TypeAdapterFactory { *; }
-
-# Keep Coil
--keep class coil.** { *; }
-
-# Keep Kotlin coroutines
--keep class kotlinx.coroutines.** { *; }
-
-# Keep Media3 Session
--keep class androidx.media3.session.** { *; }
-
-# Keep Room
--keep class androidx.room.** { *; }
-
-# Keep Serialization
--keep class kotlinx.serialization.** { *; }
-
-# Suppress warnings
--dontwarn com.squareup.okhttp3.**
--dontwarn kotlinx.coroutines.**
--dontwarn androidx.media3.**
-
-# Keep DataStore
--keep class androidx.datastore.** { *; }

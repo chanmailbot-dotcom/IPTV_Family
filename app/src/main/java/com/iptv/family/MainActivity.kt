@@ -35,6 +35,7 @@ import com.iptv.family.player.ExoPlayerController
 import com.iptv.family.shared.data.repository.LibraryRepository
 import com.iptv.family.shared.data.store.FileKeyValueStore
 import com.iptv.family.shared.log.AppLog
+import com.iptv.family.shared.i18n.T
 import com.iptv.family.shared.model.CategoryType
 import com.iptv.family.shared.model.Channel
 import com.iptv.family.state.AppState
@@ -46,14 +47,27 @@ import com.iptv.family.ui.PlayerScreen
 import com.iptv.family.ui.SettingsScreen
 import java.io.File
 
-private enum class Destination(val label: String, val icon: ImageVector) {
-    HOME("Mis listas", Icons.Rounded.VideoLibrary),
-    LIVE("TV en vivo", Icons.Rounded.LiveTv),
-    MOVIES("Películas", Icons.Rounded.Movie),
-    SERIES("Series", Icons.Rounded.Tv),
-    FAVORITES("Favoritos", Icons.Rounded.Favorite),
-    PLAYER("Reproduciendo", Icons.Rounded.LiveTv),
-    SETTINGS("Ajustes", Icons.Rounded.Settings),
+private enum class Destination(val icon: ImageVector) {
+    HOME(Icons.Rounded.VideoLibrary),
+    LIVE(Icons.Rounded.LiveTv),
+    MOVIES(Icons.Rounded.Movie),
+    SERIES(Icons.Rounded.Tv),
+    FAVORITES(Icons.Rounded.Favorite),
+    PLAYER(Icons.Rounded.LiveTv),
+    SETTINGS(Icons.Rounded.Settings);
+
+    /** En getter: una etiqueta fijada al construir el enum se queda con el
+     *  idioma que hubiera en ese momento. */
+    val label: String
+        get() = when (this) {
+            HOME -> T.misListas
+            LIVE -> T.tvEnDirecto
+            MOVIES -> T.peliculas
+            SERIES -> T.series
+            FAVORITES -> T.favoritos
+            PLAYER -> T.reproduciendo
+            SETTINGS -> T.ajustes
+        }
 }
 
 class MainActivity : ComponentActivity() {

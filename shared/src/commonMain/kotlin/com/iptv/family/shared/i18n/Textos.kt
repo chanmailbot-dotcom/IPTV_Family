@@ -43,6 +43,14 @@ interface Textos {
     val sinListasTitulo: String
     val sinListasCuerpo: String
     fun confirmarBorrado(nombre: String): String
+    // --- dialogo de añadir lista ---
+    val nombreDeLaLista: String
+    val urlDeLaLista: String
+    val urlDelPanel: String
+    val usuario: String
+    val contrasena: String
+    val mostrarContrasena: String
+    val ocultarContrasena: String
     /** Como se llama cada clase de lista donde el usuario la ve. */
     val listaM3uPorUrl: String
     val listaM3uArchivo: String
@@ -122,6 +130,13 @@ object TextosEs : Textos {
             "(Xtream Codes). Sirven las dos."
     override fun confirmarBorrado(nombre: String) =
         "¿Seguro que quieres eliminar «$nombre»? Sus favoritos se mantienen."
+    override val nombreDeLaLista = "Nombre de la lista"
+    override val urlDeLaLista = "URL de la lista"
+    override val urlDelPanel = "URL del panel"
+    override val usuario = "Usuario"
+    override val contrasena = "Contraseña"
+    override val mostrarContrasena = "Mostrar contraseña"
+    override val ocultarContrasena = "Ocultar contraseña"
     override val listaM3uPorUrl = "Lista M3U por URL"
     override val listaM3uArchivo = "Archivo M3U local"
     override val listaXtream = "Xtream Codes"
@@ -188,6 +203,13 @@ object TextosEn : Textos {
             "password (Xtream Codes). Either works."
     override fun confirmarBorrado(nombre: String) =
         "Delete “$nombre”? Its favourites are kept."
+    override val nombreDeLaLista = "Playlist name"
+    override val urlDeLaLista = "Playlist URL"
+    override val urlDelPanel = "Panel URL"
+    override val usuario = "Username"
+    override val contrasena = "Password"
+    override val mostrarContrasena = "Show password"
+    override val ocultarContrasena = "Hide password"
     override val listaM3uPorUrl = "M3U playlist by URL"
     override val listaM3uArchivo = "Local M3U file"
     override val listaXtream = "Xtream Codes"

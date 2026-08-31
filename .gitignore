@@ -37,3 +37,6 @@ mux_test.m3u8
 # Runtime de VLC descargado durante el empaquetado (ver scripts/fetch-vlc.ps1)
 composeApp/resources/windows-x64/
 composeApp/resources/linux-x64/
+
+# Credenciales de firma del APK (*.jks y *.keystore ya estan arriba)
+keystore.properties

@@ -433,14 +433,14 @@ class LibraryRepository(
             AppLog.d("Library", "fetch: ${AppLog.redactUrl(url)} -> HTTP $code")
             if (code in 300..399) {
                 val location = connection.getHeaderField("Location")
-                    ?: throw IllegalStateException("Redirección ($code) sin destino")
-                if (redirectsLeft <= 0) throw IllegalStateException("Demasiadas redirecciones")
+                    ?: error("Redirección ($code) sin destino")
+                if (redirectsLeft <= 0) error("Demasiadas redirecciones")
                 val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()
                 AppLog.d("Library", "fetch: redirige a ${AppLog.redactUrl(next)}")
                 return fetch(next, redirectsLeft - 1)
             }
             if (code !in 200..299) {
-                throw IllegalStateException("El servidor respondió $code")
+                error("El servidor respondió $code")
             }
             return connection.inputStream?.bufferedReader()?.use { it.readText() }.orEmpty()
         } finally {

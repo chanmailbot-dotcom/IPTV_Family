@@ -93,7 +93,7 @@ fun HomeScreen(
         if (appState.playlists.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "Todavía no hay ninguna lista. Añade una URL M3U o tus datos de Xtream Codes.",
+                    T.sinListasCuerpo,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -237,16 +237,16 @@ private fun AddPlaylistDialog(
                         )
                     }
                 }
-                OutlinedTextField(name, { name = it }, label = { Text("Nombre de la lista") }, singleLine = true)
+                OutlinedTextField(name, { name = it }, label = { Text(T.nombreDeLaLista) }, singleLine = true)
                 OutlinedTextField(
                     url, { url = it },
-                    label = { Text(if (mode == AddMode.XTREAM) "URL del panel" else "URL de la lista") },
+                    label = { Text(if (mode == AddMode.XTREAM) T.urlDelPanel else T.urlDeLaLista) },
                     singleLine = true,
                 )
                 if (mode == AddMode.XTREAM) {
                     OutlinedTextField(
                         user, { user = it },
-                        label = { Text("Usuario") },
+                        label = { Text(T.usuario) },
                         singleLine = true,
                         // Sin esto el teclado propone y autocorrige el usuario del
                         // panel, y ademas lo pone en mayuscula inicial.
@@ -259,7 +259,7 @@ private fun AddPlaylistDialog(
                     // de toda la habitacion mientras se teclea con el mando.
                     OutlinedTextField(
                         pass, { pass = it },
-                        label = { Text("Contraseña") },
+                        label = { Text(T.contrasena) },
                         singleLine = true,
                         visualTransformation = if (showPass) VisualTransformation.None
                         else PasswordVisualTransformation(),
@@ -271,7 +271,7 @@ private fun AddPlaylistDialog(
                             IconButton({ showPass = !showPass }) {
                                 Icon(
                                     if (showPass) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                    contentDescription = if (showPass) "Ocultar contraseña" else "Mostrar contraseña",
+                                    contentDescription = if (showPass) T.ocultarContrasena else T.mostrarContrasena,
                                 )
                             }
                         },

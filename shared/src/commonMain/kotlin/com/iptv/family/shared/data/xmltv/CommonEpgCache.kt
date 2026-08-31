@@ -102,7 +102,7 @@ class CommonEpgCache(private val parser: XmltvParser = XmltvParser()) {
         val ahora = System.currentTimeMillis()
         val connection = open(url)
         try {
-            val bruto = connection.inputStream ?: throw IllegalStateException("La guia EPG llegó vacía")
+            val bruto = connection.inputStream ?: error("La guia EPG llegó vacía")
             // Tope de expansion: un .gz de pocos MB puede descomprimirse en
             // gigabytes, a propósito o por estar roto.
             val limitado = LimitedInputStream(bruto, MAX_BYTES)
@@ -111,7 +111,7 @@ class CommonEpgCache(private val parser: XmltvParser = XmltvParser()) {
                 keepFromMs = ahora - KEEP_PAST_MS,
                 keepUntilMs = ahora + KEEP_FUTURE_MS,
             )
-            if (programas.isEmpty()) throw IllegalStateException("La guia EPG no traía programas")
+            if (programas.isEmpty()) error("La guia EPG no traía programas")
             return programas
         } finally {
             connection.disconnect()
@@ -155,14 +155,14 @@ class CommonEpgCache(private val parser: XmltvParser = XmltvParser()) {
         if (code in 300..399) {
             val location = connection.getHeaderField("Location")
             connection.disconnect()
-            if (location == null) throw IllegalStateException("Redirección ($code) sin destino")
-            if (redirectsLeft <= 0) throw IllegalStateException("Demasiadas redirecciones")
+            if (location == null) error("Redirección ($code) sin destino")
+            if (redirectsLeft <= 0) error("Demasiadas redirecciones")
             val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()
             return open(next, redirectsLeft - 1)
         }
         if (code !in 200..299) {
             connection.disconnect()
-            throw IllegalStateException("El servidor respondió $code")
+            error("El servidor respondió $code")
         }
         return connection
     }
@@ -181,7 +181,7 @@ class CommonEpgCache(private val parser: XmltvParser = XmltvParser()) {
         private fun contar(n: Long) {
             leidos += n
             if (leidos > maxBytes) {
-                throw IllegalStateException("La guia EPG supera ${maxBytes / (1024 * 1024)} MB: se descarta")
+                error("La guia EPG supera ${maxBytes / (1024 * 1024)} MB: se descarta")
             }
         }
     }
