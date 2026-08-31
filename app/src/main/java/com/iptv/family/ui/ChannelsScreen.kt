@@ -182,8 +182,15 @@ fun ChannelsScreen(
                 )
             }
 
-            if (showPreview) {
-                LivePreviewPanel(controller = previewController!!, channelName = (focusedChannel ?: list.firstOrNull())?.name)
+            // `showPreview` ya implica que hay controlador, pero se captura en
+            // vez de forzarlo: asi no hay nada que se pueda romper si mañana
+            // cambia la condicion.
+            val controladorVista = previewController
+            if (showPreview && controladorVista != null) {
+                LivePreviewPanel(
+                    controller = controladorVista,
+                    channelName = (focusedChannel ?: list.firstOrNull())?.name,
+                )
             }
 
             // "Cargando" y "vacio" NO son lo mismo, y aqui se enseñaban igual:
@@ -338,7 +345,7 @@ private fun LivePreviewPanel(controller: ExoPlayerController, channelName: Strin
             )
         }
         Text(
-            channelName ?: "",
+            channelName.orEmpty(),
             color = Color.White,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,

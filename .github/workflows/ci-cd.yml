@@ -41,8 +41,11 @@ jobs:
 
       # El job se llamaba "Tests y analisis estatico" y solo ejecutaba tests:
       # detekt estaba declarado en el build y no se aplicaba en ningun modulo.
+      # Dos mitades: la logica (shared + escritorio) se analiza CON resolucion de
+      # tipos; la interfaz de Android, sin ella (su classpath es otro, y dandole
+      # el de la JVM detekt concluye mal: ver el comentario en build.gradle.kts).
       - name: Analisis estatico (detekt)
-        run: ./gradlew detekt
+        run: ./gradlew analisisEstatico
 
       - name: Informe de detekt
         uses: actions/upload-artifact@v4

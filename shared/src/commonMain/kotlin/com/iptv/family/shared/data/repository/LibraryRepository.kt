@@ -168,8 +168,9 @@ class LibraryRepository(
         // plataforma sabe cifrar, se reescribe AHORA. Esperar al proximo guardado
         // no valdria: las listas solo se guardan al añadir o renombrar una, asi
         // que quien ya tenia la suya se habria quedado en claro para siempre.
-        val hayEnClaro = guardadas.any {
-            !it.xtreamPass.isNullOrEmpty() && !it.xtreamPass!!.startsWith(SecretVault.PREFIX)
+        val hayEnClaro = guardadas.any { playlist ->
+            val clave = playlist.xtreamPass
+            !clave.isNullOrEmpty() && !clave.startsWith(SecretVault.PREFIX)
         }
         if (hayEnClaro && vault.protect("x") != null) {
             AppLog.d("Library", "cifrando credenciales que estaban en claro")

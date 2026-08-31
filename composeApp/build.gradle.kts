@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.iptv.family"
-version = "1.0.0"
+version = providers.gradleProperty("iptvFamilyVersion").get()
 
 kotlin {
     jvm("desktop")
@@ -54,6 +54,11 @@ kotlin {
         val desktopTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                // Pruebas de interfaz: hasta ahora la UI solo se comprobaba a
+                // mano (capturas de pantalla), asi que nada impedia que una
+                // regresion volviera a colar. Esto permite montar una pantalla
+                // en un tamaño concreto y preguntarle que hay dentro.
+                implementation(compose.desktop.uiTestJUnit4)
             }
         }
     }
@@ -105,11 +110,9 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
             )
             packageName = "IPTV Family"
-            // Windows Installer solo actualiza en sitio si la version SUBE. Con el
-            // mismo numero aborta con "Another version of this product is already
-            // installed" y hay que desinstalar a mano. Al publicar un instalador
-            // nuevo, subir esto.
-            packageVersion = "1.0.3"
+            // Sale de `iptvFamilyVersion` en gradle.properties, que es la unica
+            // fuente de la version del proyecto.
+            packageVersion = project.version.toString()
             description = "Reproductor IPTV para Windows, Linux y macOS"
             vendor = "IPTV Family"
             appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))

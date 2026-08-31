@@ -18,3 +18,4 @@ fun textoAntiguedad(instanteMs: Long, ahoraMs: Long = System.currentTimeMillis()
     return T.antiguedad(minutos)
 }
 
+

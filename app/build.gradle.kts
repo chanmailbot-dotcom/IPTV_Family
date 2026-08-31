@@ -14,8 +14,15 @@ android {
         applicationId = "com.iptv.family"
         minSdk = 21
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // Los dos salen de `iptvFamilyVersion` en gradle.properties. El
+        // versionCode se deriva del nombre (1.0.3 -> 10003) porque Android exige
+        // un entero que SIEMPRE suba: mantenerlo a mano es como se acaba
+        // publicando dos veces el mismo numero y que la tienda rechace la
+        // segunda.
+        versionName = providers.gradleProperty("iptvFamilyVersion").get()
+        versionCode = versionName!!.split(".").let { (mayor, menor, parche) ->
+            mayor.toInt() * 10000 + menor.toInt() * 100 + parche.toInt()
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

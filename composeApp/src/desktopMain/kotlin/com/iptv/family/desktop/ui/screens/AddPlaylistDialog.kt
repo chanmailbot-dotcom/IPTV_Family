@@ -153,11 +153,15 @@ fun AddPlaylistDialog(
                             Text("Elegir archivo .m3u")
                         }
                         filePath?.let { path ->
+                            // El contenido se captura en un local: es estado de
+                            // Compose y puede cambiar entre comprobarlo y usarlo,
+                            // asi que forzarlo con `!!` era un fallo esperando.
+                            val contenido = fileContent
                             Text(
                                 when {
                                     fileError != null -> fileError.orEmpty()
-                                    fileContent == null -> "Leyendo ${File(path).name}…"
-                                    else -> "${File(path).name} · ${fileContent!!.length / 1024} KB"
+                                    contenido == null -> "Leyendo ${File(path).name}…"
+                                    else -> "${File(path).name} · ${contenido.length / 1024} KB"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (fileError != null) MaterialTheme.colorScheme.error

@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.iptv.family"
-version = "1.0.0"
+version = providers.gradleProperty("iptvFamilyVersion").get()
 
 kotlin {
     // Biblioteca compartida: lógica de dominio y acceso a datos

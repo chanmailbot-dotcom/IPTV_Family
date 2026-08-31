@@ -427,7 +427,9 @@ fun PlayerScreen(
             title = T.pistaDeAudio,
             options = controller.audioTracks,
             allowOff = false,
-            onPick = { id -> controller.selectAudioTrack(id!!) },
+            // El menu comparte codigo con el de subtitulos, donde null = apagar;
+            // en audio no existe esa opcion (allowOff = false).
+            onPick = { id -> id?.let { controller.selectAudioTrack(it) } },
             onDismiss = { showAudioPicker = false; lastInteraction = System.currentTimeMillis() },
         )
     }

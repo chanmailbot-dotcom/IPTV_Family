@@ -8,69 +8,49 @@
     <ID>CyclomaticComplexMethod:AudioTrackPreference.kt$AudioTrackPreference$fun displayName(language: String?, title: String? = null): String</ID>
     <ID>CyclomaticComplexMethod:AudioTranscoder.kt$AudioTranscoder.Companion$fun pickAudioTrack(ffprobeOutput: String): AudioInfo?</ID>
     <ID>CyclomaticComplexMethod:ChannelRow.kt$@Composable fun ChannelRow( channel: Channel, onChannelClick: (Channel) -&gt; Unit, scope: CoroutineScope, appState: AppState, isCurrent: Boolean = false, compact: Boolean = false, )</ID>
-    <ID>CyclomaticComplexMethod:ChannelsScreen.kt$@Composable fun ChannelsScreen( appState: AppState, scope: CoroutineScope, mediaType: CategoryType?, onPlay: (Channel, List&lt;Channel&gt;) -&gt; Unit, onPreview: ((Channel, List&lt;Channel&gt;) -&gt; Unit)? = null, previewController: ExoPlayerController? = null, /** El canal a re-enfocar al entrar (p.ej. al volver de pantalla completa). */ restoreFocusChannelId: String? = null, )</ID>
     <ID>CyclomaticComplexMethod:ChannelsScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun ChannelsScreen( appState: AppState, scope: CoroutineScope, onPlay: (Channel, List&lt;Channel&gt;) -&gt; Unit, onGoHome: () -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:Main.kt$private fun mainWindow()</ID>
-    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
-    <ID>CyclomaticComplexMethod:PlayerScreen.kt$@Composable fun PlayerScreen( controller: ExoPlayerController, channel: Channel, /** * Para consultar la guia. La lista ya enseñaba «Ahora: …» y el reproductor * no: al sacar los mandos no habia forma de saber que estabas viendo ni * cuanto le quedaba, que es justo lo que se pregunta al zapear. */ appState: AppState? = null, zapList: List&lt;Channel&gt; = emptyList(), onSelectChannel: (Channel) -&gt; Unit = {}, onBack: () -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:RemoteWebServer.kt$RemoteWebServer$fun start(port: Int)</ID>
     <ID>EmptyFunctionBlock:AppStateTest.kt$AppStateTest${}</ID>
+    <ID>InjectDispatcher:AddPlaylistDialog.kt$IO</ID>
+    <ID>InjectDispatcher:ChannelLogo.kt$LogoCache$IO</ID>
+    <ID>InjectDispatcher:CommonEpgCache.kt$CommonEpgCache$IO</ID>
+    <ID>InjectDispatcher:LibraryRepository.kt$LibraryRepository$IO</ID>
+    <ID>InjectDispatcher:LibraryState.kt$LibraryState$IO</ID>
+    <ID>InjectDispatcher:XtreamApiClient.kt$XtreamApiClient$IO</ID>
     <ID>LargeClass:RemoteWebServer.kt$RemoteWebServer</ID>
     <ID>LongMethod:AddPlaylistDialog.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddPlaylistDialog( scope: CoroutineScope, onDismiss: () -&gt; Unit, onAddM3uUrl: (name: String, url: String, epgUrl: String?) -&gt; Unit, onAddXtream: (name: String, url: String, user: String, pass: String, epgUrl: String?) -&gt; Unit, onAddM3uFile: (name: String, content: String) -&gt; Unit, onChooseFile: () -&gt; String?, )</ID>
-    <ID>LongMethod:ChannelsScreen.kt$@Composable fun ChannelsScreen( appState: AppState, scope: CoroutineScope, mediaType: CategoryType?, onPlay: (Channel, List&lt;Channel&gt;) -&gt; Unit, onPreview: ((Channel, List&lt;Channel&gt;) -&gt; Unit)? = null, previewController: ExoPlayerController? = null, /** El canal a re-enfocar al entrar (p.ej. al volver de pantalla completa). */ restoreFocusChannelId: String? = null, )</ID>
     <ID>LongMethod:ChannelsScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun ChannelsScreen( appState: AppState, scope: CoroutineScope, onPlay: (Channel, List&lt;Channel&gt;) -&gt; Unit, onGoHome: () -&gt; Unit, )</ID>
     <ID>LongMethod:Main.kt$private fun mainWindow()</ID>
-    <ID>LongMethod:PlayerScreen.kt$@Composable fun PlayerScreen( controller: ExoPlayerController, channel: Channel, /** * Para consultar la guia. La lista ya enseñaba «Ahora: …» y el reproductor * no: al sacar los mandos no habia forma de saber que estabas viendo ni * cuanto le quedaba, que es justo lo que se pregunta al zapear. */ appState: AppState? = null, zapList: List&lt;Channel&gt; = emptyList(), onSelectChannel: (Channel) -&gt; Unit = {}, onBack: () -&gt; Unit, )</ID>
     <ID>LongMethod:RemoteWebServer.kt$RemoteWebServer$fun start(port: Int)</ID>
     <ID>LongMethod:SettingsScreen.kt$@Composable fun SettingsScreen(appState: AppState, scope: CoroutineScope)</ID>
     <ID>LongMethod:SettingsScreen.kt$@Composable private fun WebUsersBlock(appState: AppState, scope: CoroutineScope)</ID>
     <ID>MatchingDeclarationName:AddPlaylistDialog.kt$AddMode</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$.</ID>
     <ID>MaxLineLength:ChannelsScreen.kt$Column</ID>
     <ID>MaxLineLength:ChannelsScreen.kt$IconButton({ search = "" }) { Icon(Icons.Rounded.Clear, contentDescription = "Limpiar búsqueda") }</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$LivePreviewPanel(controller = previewController!!, channelName = (focusedChannel ?: list.firstOrNull())?.name)</ID>
     <ID>MaxLineLength:ChannelsScreen.kt$Text("No hay ninguna lista abierta", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)</ID>
     <ID>MaxLineLength:ChannelsScreen.kt$Text("No se pudo cargar la lista", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$Text(channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$contentDescription = if (channel.isFavorite) "Favorito (mantén pulsado para quitar)" else "Mantén pulsado para marcar favorito"</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$factory = { context -&gt; PlayerView(context).apply { player = controller.player; useController = false } }</ID>
     <ID>MaxLineLength:ChannelsScreen.kt$if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$onValueChange = { if (it.length &lt;= ParentalControl.MAX_PIN_LENGTH) { pin = it; fallo = false } }</ID>
-    <ID>MaxLineLength:ChannelsScreen.kt$tint = if (channel.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant</ID>
-    <ID>MaxLineLength:ExoPlayerController.kt$ExoPlayerController$val (groupIndex, trackIndex) = id.split(':').let { it.getOrNull(0)?.toIntOrNull() to it.getOrNull(1)?.toIntOrNull() }</ID>
-    <ID>MaxLineLength:ExoPlayerController.kt$ExoPlayerController.&lt;no name provided&gt;$AppLog.e("ExoPlayer", "error al reproducir ${AppLog.redactUrl(currentUrl.orEmpty())}", playbackException)</ID>
     <ID>MaxLineLength:FavoritesScreen.kt$Text("Todavía no hay favoritos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)</ID>
     <ID>MaxLineLength:FileKeyValueStoreTest.kt$FileKeyValueStoreTest$assertTrue(fallos.isEmpty(), "ninguna escritura debe fallar, y fallaron ${fallos.size}: ${fallos.firstOrNull()}")</ID>
     <ID>MaxLineLength:FileKeyValueStoreTest.kt$FileKeyValueStoreTest$assertTrue(leido != null &amp;&amp; Regex("""^hilo \d+ vuelta \d+$""").matches(leido), "contenido inconsistente: $leido")</ID>
-    <ID>MaxLineLength:HomeScreen.kt$Button({ scope.launch { appState.deletePlaylist(playlist.id) }; pendingDelete = null }) { Text(T.eliminar) }</ID>
-    <ID>MaxLineLength:HomeScreen.kt$Icon(Icons.Rounded.PlayArrow, contentDescription = T.verCanales, tint = MaterialTheme.colorScheme.primary)</ID>
     <ID>MaxLineLength:HomeScreen.kt$Text(AppStrings.Home.TITLE, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)</ID>
     <ID>MaxLineLength:HomeScreen.kt$Text(playlist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)</ID>
-    <ID>MaxLineLength:HomeScreen.kt$if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant</ID>
     <ID>MaxLineLength:LibraryRepository.kt$LibraryRepository$val url = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "http://$raw"</ID>
     <ID>MaxLineLength:LibraryRepositoryTest.kt$LibraryRepositoryTest$Playlist(id = "2", name = "Xtream", type = SourceType.XTREAM, xtreamUrl = "http://panel", xtreamUser = "u", xtreamPass = "p")</ID>
     <ID>MaxLineLength:LoginThrottleTest.kt$LoginThrottleTest$assertEquals(5 * 60 * 1000L, f.esperaPendiente("ip"), "sin tope, un ataque dejaria la cuenta inservible para siempre")</ID>
     <ID>MaxLineLength:Main.kt$onAddXtream = { name, url, user, pass, epg -&gt; scope.launch { appState.addXtream(name, url, user, pass, epg) } }</ID>
     <ID>MaxLineLength:ParentalControl.kt$ParentalControl$fun</ID>
-    <ID>MaxLineLength:PlayerScreen.kt$ProgressBar(controller.positionMs, controller.durationMs, Modifier.padding(horizontal = 24.dp, vertical = 12.dp))</ID>
-    <ID>MaxLineLength:PlayerScreen.kt$color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface</ID>
-    <ID>MaxLineLength:PlayerScreen.kt$factory = { context -&gt; PlayerView(context).apply { player = controller.player; useController = false } }</ID>
     <ID>MaxLineLength:PlayerScreen.kt$if (controller.isMuted || controller.volume == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp</ID>
-    <ID>MaxLineLength:PlayerScreen.kt$if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface</ID>
-    <ID>MaxLineLength:PlayerScreen.kt$modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(vertical = 10.dp, horizontal = 12.dp)</ID>
     <ID>MaxLineLength:RemoteWebServer.kt$RemoteWebServer$"conversion de audio activada pero no se encontro ffmpeg: los canales con AC-3/MP2 seguiran sin sonido en la web"</ID>
     <ID>MaxLineLength:RemoteWebServer.kt$RemoteWebServer$"now-playing" to Json.encodeToString(NowPlayingDto.serializer(), event.dto)</ID>
     <ID>MaxLineLength:RemoteWebServer.kt$RemoteWebServer$appState.mutateSettings { copy(webUsers = webUsers.filterNot { it.username == existing.username }) }</ID>
     <ID>MaxLineLength:RemoteWebServer.kt$RemoteWebServer$val</ID>
     <ID>MaxLineLength:SecretVaultTest.kt$SecretVaultTest$"""[{"id":"pl-1","name":"Casa","type":"XTREAM","xtreamUrl":"http://p","xtreamUser":"u","xtreamPass":"vieja"}]"""</ID>
     <ID>MaxLineLength:SecretVaultTest.kt$SecretVaultTest$assertEquals("vieja", repo.loadPlaylists().single().xtreamPass, "no se puede dejar tirado a quien ya tenia listas")</ID>
-    <ID>MaxLineLength:SettingsScreen.kt$Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large).padding(18.dp)</ID>
     <ID>MaxLineLength:SettingsScreen.kt$Row</ID>
-    <ID>MaxLineLength:SettingsScreen.kt$Text("Información", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)</ID>
-    <ID>MaxLineLength:SettingsScreen.kt$Text("Versión 1.0.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
     <ID>MaxLineLength:SettingsScreen.kt$appState.mutateSettings { copy(webUsers = webUsers.filterNot { it.username == user.username }) }</ID>
     <ID>MaxLineLength:SettingsScreen.kt$if</ID>
-    <ID>MaxLineLength:SettingsScreen.kt$onCheckedChange = { enabled -&gt; scope.launch { appState.mutateSettings { copy(isParentalLockEnabled = enabled) } } }</ID>
     <ID>MaxLineLength:SettingsScreen.kt$onValueChange = { if (it.length &lt;= ParentalControl.MAX_PIN_LENGTH &amp;&amp; it.all(Char::isDigit)) pin = it }</ID>
     <ID>MaxLineLength:StreamProxy.kt$StreamProxy$AppLog.d("StreamProxy", "mux segmento: cache ${segmentCache.size} entradas (~${segmentCache.values.sumOf { it.bytes.size } / 1024} KB)")</ID>
     <ID>MaxLineLength:StreamProxy.kt$StreamProxy$AppLog.e("StreamProxy", "mux manifest: fallo de red con ${AppLog.redactUrl(originUrl)}: ${r.message}")</ID>
@@ -79,8 +59,91 @@
     <ID>MaxLineLength:VlcPlayer.kt$VlcController$"play: ${AppLog.redactUrl(url)} via ${AppLog.redactUrl(media)} (surfaceReady=$isSurfaceReady, caching=${networkCachingMs}ms, hw=$hardwareDecoding)"</ID>
     <ID>MaxLineLength:XtreamApiClientTest.kt$XtreamApiClientTest$private val epgJson = """{"epg":[{"id":"1","channel_id":"101","title":"Programa","description":"Desc","start":"1704070800","end":"1704074400","category":"X"}]}"""</ID>
     <ID>MaxLineLength:XtreamApiClientTest.kt$XtreamApiClientTest$private val liveCatsJson = """[{"category_id":"5","category_name":"Noticias"},{"category_id":"7","category_name":"Deportes"}]"""</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ AppLog.e("RemoteServer", "episodios de '${series.name}'", it) }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ ChannelDto( id = it.id, name = it.name, number = it.number, logoUrl = it.logoUrl, group = it.group, kind = kindOf(it.categoryType), ) }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ RemoteAuth.login(users(), it.username, it.password) }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ SessionDto(it.username, it.role.name.lowercase()) }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ UserDto(it.username, it.role.name.lowercase(), it.createdAt) }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ episodesSeen[it.id] = it }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ it.id == id }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ it.role == WebRole.ADMIN }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ it.username.equals(req.username.trim(), ignoreCase = true) }</ID>
+    <ID>NoNameShadowing:RemoteWebServer.kt$RemoteWebServer${ it.username.equals(username, ignoreCase = true) }</ID>
+    <ID>RedundantSuspendModifier:LibraryState.kt$LibraryState$suspend</ID>
     <ID>ReturnCount:RemoteWebServer.kt$RemoteWebServer$private fun transcodedPlaylistOrNull(): File?</ID>
     <ID>SpreadOperator:RemoteWebServer.kt$RemoteWebServer$(*claves)</ID>
     <ID>SpreadOperator:VlcPlayer.kt$VlcController$(media, *options.toTypedArray())</ID>
+    <ID>UnnecessarySafeCall:Main.kt$controller?.isMuted</ID>
+    <ID>UnnecessarySafeCall:Main.kt$controller?.volume</ID>
+    <ID>UnnecessarySafeCall:RemoteWebServer.kt$RemoteWebServer$controller?.changeMuted(req.muted)</ID>
+    <ID>UnnecessarySafeCall:RemoteWebServer.kt$RemoteWebServer$controller?.changeVolume(req.volume)</ID>
+    <ID>UnnecessarySafeCall:RemoteWebServer.kt$RemoteWebServer$controller?.togglePlayPause()</ID>
+    <ID>UnreachableCode:AppLog.kt$AppLog$appendText(line + "\n")</ID>
+    <ID>UnreachableCode:AppLog.kt$AppLog$runCatching { f.appendText(line + "\n") }</ID>
+    <ID>UnreachableCode:AppLog.kt$AppLog$val f = file ?: return</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$AppLog.d("Logos", "trimDisk: cache reducida a ~${total / 1024} KB")</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$for (file in files.sortedBy { it.lastModified() }) { if (total &lt;= DISK_MAX_BYTES / 2) break val size = file.length() if (file.delete()) total -= size }</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$if (!tmp.renameTo(target)) tmp.delete()</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$if (++diskWrites % 400 == 0) trimDisk()</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$if (target.exists()) target.delete()</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$if (total &lt;= DISK_MAX_BYTES) return</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$runCatching { val tmp = File(diskDir, "${target.name}.tmp") tmp.writeBytes(bytes) if (target.exists()) target.delete() if (!tmp.renameTo(target)) tmp.delete() if (++diskWrites % 400 == 0) trimDisk() }</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$tmp.writeBytes(bytes)</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$val files = diskDir.listFiles() ?: return</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$val target = diskFileFor(url) ?: return</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$val tmp = File(diskDir, "${target.name}.tmp")</ID>
+    <ID>UnreachableCode:ChannelLogo.kt$LogoCache$var total = files.sumOf { it.length() }</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$d("EPG", "fetch: ${AppLog.redactUrl(url)} -&gt; HTTP $code")</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$if (code !in 200..299) { connection.disconnect() error("El servidor respondió $code") }</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$if (code in 300..399) { val location = connection.getHeaderField("Location") connection.disconnect() if (location == null) error("Redirección ($code) sin destino") if (redirectsLeft &lt;= 0) error("Demasiadas redirecciones") val next = if (location.startsWith("http")) location else URL(URL(url), location).toString() return open(next, redirectsLeft - 1) }</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$if (programas.isEmpty()) error("La guia EPG no traía programas")</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$return connection</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$return programas</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$val bruto = connection.inputStream ?: error("La guia EPG llegó vacía")</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$val limitado = LimitedInputStream(bruto, MAX_BYTES)</ID>
+    <ID>UnreachableCode:CommonEpgCache.kt$CommonEpgCache$val programas = parser.parse( input = maybeGunzip(limitado), keepFromMs = ahora - KEEP_PAST_MS, keepUntilMs = ahora + KEEP_FUTURE_MS, )</ID>
+    <ID>UnreachableCode:DesktopVault.kt$DpapiVault$return transformar(bytes, cifrar = false)?.toString(Charsets.UTF_8)</ID>
+    <ID>UnreachableCode:DesktopVault.kt$DpapiVault$val bytes = runCatching { Base64.getDecoder().decode(token) }.getOrNull() ?: return null</ID>
+    <ID>UnreachableCode:LibraryRepository.kt$LibraryRepository$AppLog.d("Library", "fetch: redirige a ${AppLog.redactUrl(next)}")</ID>
+    <ID>UnreachableCode:LibraryRepository.kt$LibraryRepository$if (redirectsLeft &lt;= 0) error("Demasiadas redirecciones")</ID>
+    <ID>UnreachableCode:LibraryRepository.kt$LibraryRepository$return fetch(next, redirectsLeft - 1)</ID>
+    <ID>UnreachableCode:LibraryRepository.kt$LibraryRepository$val location = connection.getHeaderField("Location") ?: error("Redirección ($code) sin destino")</ID>
+    <ID>UnreachableCode:LibraryRepository.kt$LibraryRepository$val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()</ID>
+    <ID>UnreachableCode:ParentalControl.kt$ParentalControl$return MessageDigest.isEqual(derive(entered, sal), esperado)</ID>
+    <ID>UnreachableCode:ParentalControl.kt$ParentalControl$val esperado = runCatching { Base64.getDecoder().decode(partes[1]) }.getOrNull() ?: return false</ID>
+    <ID>UnreachableCode:ParentalControl.kt$ParentalControl$val sal = runCatching { Base64.getDecoder().decode(partes[0]) }.getOrNull() ?: return false</ID>
+    <ID>UnreachableCode:PasswordHasher.kt$PasswordHasher$derive(password, salt, user.iterations)</ID>
+    <ID>UnreachableCode:PasswordHasher.kt$PasswordHasher$return MessageDigest.isEqual(expected, actual)</ID>
+    <ID>UnreachableCode:PasswordHasher.kt$PasswordHasher$val actual = runCatching { derive(password, salt, user.iterations) }.getOrNull() ?: return false</ID>
+    <ID>UnreachableCode:PasswordHasher.kt$PasswordHasher$val expected = runCatching { decoder.decode(user.passwordHash) }.getOrNull() ?: return false</ID>
+    <ID>UnreachableCode:PasswordHasher.kt$PasswordHasher$val salt = runCatching { decoder.decode(user.salt) }.getOrNull() ?: return false</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$equals(session.username, ignoreCase = true)</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$if (now - session.lastSeenAt &gt; SESSION_IDLE_TIMEOUT_MS) { sessions.remove(token) return null }</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$if (user == null) { sessions.remove(token) return null }</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$return if (user.role == session.role) session else session.copy(role = user.role) .also { sessions[token] = it }</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$session.lastSeenAt = now</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$val now = System.currentTimeMillis()</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$val session = sessions[token] ?: return null</ID>
+    <ID>UnreachableCode:RemoteAuth.kt$RemoteAuth$val user = users.firstOrNull { it.username.equals(session.username, ignoreCase = true) }</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcController$AppLog.d( "Vlc", "audio: ${tracks.size} pistas (${tracks.joinToString { it.label }}); " + "cambiando a ${best.label} porque la activa no era la preferida" )</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcController$autoSelectedForUrl = currentUrl</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcController$selectAudioTrack(best.id)</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcController$val best = AudioTrackPreference.preferred(tracks, { it.language }, { it.title }) ?: return</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcNative$return if (File(vlc, "plugins").isDirectory) vlc.absolutePath else null</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcNative$val resources = System.getProperty("compose.application.resources.dir") ?: return null</ID>
+    <ID>UnreachableCode:VlcPlayer.kt$VlcNative$val vlc = File(resources, "vlc")</ID>
+    <ID>UnsafeCallOnNullableType:AudioTranscoderTest.kt$AudioTranscoderTest$AudioTranscoder.pickAudioTrack(salida)!!</ID>
+    <ID>UnsafeCallOnNullableType:CorruptionRecoveryTest.kt$CorruptionRecoveryTest$apartado!!</ID>
+    <ID>UnsafeCallOnNullableType:FileKeyValueStoreTest.kt$FileKeyValueStoreTest$apartado!!</ID>
+    <ID>UseOrEmpty:RemoteWebServer.kt$RemoteWebServer$detected?.let { " (pista ${it.trackIndex})" } ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$(userInfo?.get("exp_date") as? JsonPrimitive)?.content ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$(userInfo?.get("status") as? JsonPrimitive)?.content ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$epg.stringOrNull("channel_id") ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$epg.stringOrNull("id") ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$epg.stringOrNull("title") ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$stream.stringOrNull("category_id") ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClient.kt$XtreamApiClient$stream?.bufferedReader()?.use { it.readText() } ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClientTest.kt$XtreamApiClientTest$exchange.requestURI?.getQuery() ?: ""</ID>
+    <ID>UseOrEmpty:XtreamApiClientTest.kt$XtreamApiClientTest$query.split("&amp;") .map { it.split("=", limit = 2) } .firstOrNull { it.size &gt; 1 &amp;&amp; it[0] == "action" }?.get(1) ?: ""</ID>
   </CurrentIssues>
 </SmellBaseline>

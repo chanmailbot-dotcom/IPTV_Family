@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:ChannelsScreen.kt$@Composable fun ChannelsScreen( appState: AppState, scope: CoroutineScope, mediaType: CategoryType?, onPlay: (Channel, List&lt;Channel&gt;) -&gt; Unit, onPreview: ((Channel, List&lt;Channel&gt;) -&gt; Unit)? = null, previewController: ExoPlayerController? = null, /** El canal a re-enfocar al entrar (p.ej. al volver de pantalla completa). */ restoreFocusChannelId: String? = null, )</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
+    <ID>CyclomaticComplexMethod:PlayerScreen.kt$@Composable fun PlayerScreen( controller: ExoPlayerController, channel: Channel, /** * Para consultar la guia. La lista ya enseñaba «Ahora: …» y el reproductor * no: al sacar los mandos no habia forma de saber que estabas viendo ni * cuanto le quedaba, que es justo lo que se pregunta al zapear. */ appState: AppState? = null, zapList: List&lt;Channel&gt; = emptyList(), onSelectChannel: (Channel) -&gt; Unit = {}, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:ChannelsScreen.kt$@Composable fun ChannelsScreen( appState: AppState, scope: CoroutineScope, mediaType: CategoryType?, onPlay: (Channel, List&lt;Channel&gt;) -&gt; Unit, onPreview: ((Channel, List&lt;Channel&gt;) -&gt; Unit)? = null, previewController: ExoPlayerController? = null, /** El canal a re-enfocar al entrar (p.ej. al volver de pantalla completa). */ restoreFocusChannelId: String? = null, )</ID>
+    <ID>LongMethod:PlayerScreen.kt$@Composable fun PlayerScreen( controller: ExoPlayerController, channel: Channel, /** * Para consultar la guia. La lista ya enseñaba «Ahora: …» y el reproductor * no: al sacar los mandos no habia forma de saber que estabas viendo ni * cuanto le quedaba, que es justo lo que se pregunta al zapear. */ appState: AppState? = null, zapList: List&lt;Channel&gt; = emptyList(), onSelectChannel: (Channel) -&gt; Unit = {}, onBack: () -&gt; Unit, )</ID>
+    <ID>MaxLineLength:ChannelsScreen.kt$.</ID>
+    <ID>MaxLineLength:ChannelsScreen.kt$Text(channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)</ID>
+    <ID>MaxLineLength:ChannelsScreen.kt$contentDescription = if (channel.isFavorite) "Favorito (mantén pulsado para quitar)" else "Mantén pulsado para marcar favorito"</ID>
+    <ID>MaxLineLength:ChannelsScreen.kt$factory = { context -&gt; PlayerView(context).apply { player = controller.player; useController = false } }</ID>
+    <ID>MaxLineLength:ChannelsScreen.kt$onValueChange = { if (it.length &lt;= ParentalControl.MAX_PIN_LENGTH) { pin = it; fallo = false } }</ID>
+    <ID>MaxLineLength:ChannelsScreen.kt$tint = if (channel.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant</ID>
+    <ID>MaxLineLength:ExoPlayerController.kt$ExoPlayerController$val (groupIndex, trackIndex) = id.split(':').let { it.getOrNull(0)?.toIntOrNull() to it.getOrNull(1)?.toIntOrNull() }</ID>
+    <ID>MaxLineLength:ExoPlayerController.kt$ExoPlayerController.&lt;no name provided&gt;$AppLog.e("ExoPlayer", "error al reproducir ${AppLog.redactUrl(currentUrl.orEmpty())}", playbackException)</ID>
+    <ID>MaxLineLength:HomeScreen.kt$Button({ scope.launch { appState.deletePlaylist(playlist.id) }; pendingDelete = null }) { Text(T.eliminar) }</ID>
+    <ID>MaxLineLength:HomeScreen.kt$Icon(Icons.Rounded.PlayArrow, contentDescription = T.verCanales, tint = MaterialTheme.colorScheme.primary)</ID>
+    <ID>MaxLineLength:HomeScreen.kt$if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant</ID>
+    <ID>MaxLineLength:PlayerScreen.kt$ProgressBar(controller.positionMs, controller.durationMs, Modifier.padding(horizontal = 24.dp, vertical = 12.dp))</ID>
+    <ID>MaxLineLength:PlayerScreen.kt$color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface</ID>
+    <ID>MaxLineLength:PlayerScreen.kt$factory = { context -&gt; PlayerView(context).apply { player = controller.player; useController = false } }</ID>
+    <ID>MaxLineLength:PlayerScreen.kt$if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface</ID>
+    <ID>MaxLineLength:PlayerScreen.kt$modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(vertical = 10.dp, horizontal = 12.dp)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large).padding(18.dp)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$Text("Información", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$Text("Versión 1.0.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$onCheckedChange = { enabled -&gt; scope.launch { appState.mutateSettings { copy(isParentalLockEnabled = enabled) } } }</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -114,18 +114,17 @@ exceptions:
 
 potential-bugs:
   active: true
-  # OJO: este analisis corre SIN resolucion de tipos (no se le pasa el classpath
-  # de compilacion). Comprobado: un `a!!` sobre un nulable NO se detecta. Las
-  # reglas que dependen de los tipos se dejan apagadas explicitamente en vez de
-  # aparentar que vigilan algo.
-  #
-  # Lo que si funciona, y esta comprobado que salta con codigo nuevo, es todo lo
-  # estructural: complejidad, tamaño, nombres, excepciones genericas, bloques
-  # vacios y codigo inalcanzable.
+  # Estas necesitan RESOLUCION DE TIPOS, que se le da a detekt en el build raiz
+  # (classpath de compilacion de los tres modulos). Sin ella no saltaban aunque
+  # estuvieran activadas -- comprobado con un `a!!` que pasaba desapercibido.
   UnsafeCallOnNullableType:
-    active: false
+    active: true
   UnnecessaryNotNullOperator:
-    active: false
+    active: true
+  NullCheckOnMutableProperty:
+    active: true
+  CastToNullableType:
+    active: true
   UnreachableCode:
     active: true
 

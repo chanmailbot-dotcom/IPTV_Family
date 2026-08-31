@@ -218,15 +218,19 @@ class RemoteWebServer(
         eventBus = bus
 
         if (appState.settings.transcodeAudioForWeb) {
-            ffmpeg = AudioTranscoder.resolveFfmpeg(appState.settings.ffmpegPath)
-            if (ffmpeg == null) {
+            // Se captura en un local: `ffmpeg` es una propiedad mutable, asi que
+            // comprobarla y luego usarla con `!!` era confiar en que nada la
+            // cambie entre las dos lineas -- y aqui hay corrutinas de por medio.
+            val rutaFfmpeg = AudioTranscoder.resolveFfmpeg(appState.settings.ffmpegPath)
+            ffmpeg = rutaFfmpeg
+            if (rutaFfmpeg == null) {
                 AppLog.w(
                     "RemoteServer",
                     "conversion de audio activada pero no se encontro ffmpeg: los canales con AC-3/MP2 seguiran sin sonido en la web"
                 )
             } else {
                 val dir = File(System.getProperty("java.io.tmpdir"), "iptv-family-transcode")
-                val tc = AudioTranscoder(ffmpeg!!, dir)
+                val tc = AudioTranscoder(rutaFfmpeg, dir)
                 transcoder = tc
                 AppLog.d("RemoteServer", "conversion de audio lista (ffmpeg: $ffmpeg)")
                 // Vigilante de inactividad: sin esto, ffmpeg seguiria vivo para
@@ -387,11 +391,11 @@ class RemoteWebServer(
                     }
                     val req = call.receiveJson<LoginRequest>()
                     val error = validateCredentials(req?.username, req?.password)
-                    if (error != null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to error))
+                    if (error != null || req == null) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error ?: "bad_request")))
                         return@post
                     }
-                    val user = PasswordHasher.createUser(req!!.username, req.password, WebRole.ADMIN)
+                    val user = PasswordHasher.createUser(req.username, req.password, WebRole.ADMIN)
                     // .join(): hay que ESPERAR a que la cuenta este guardada antes de
                     // contestar. Sin esto la web hacia login inmediatamente despues y
                     // se encontraba con que todavia no habia usuarios.
@@ -465,15 +469,15 @@ class RemoteWebServer(
                     if (!requireAdmin()) return@post
                     val req = call.receiveJson<CreateUserRequest>()
                     val error = validateCredentials(req?.username, req?.password)
-                    if (error != null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to error))
+                    if (error != null || req == null) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error ?: "bad_request")))
                         return@post
                     }
-                    if (users().any { it.username.equals(req!!.username.trim(), ignoreCase = true) }) {
+                    if (users().any { it.username.equals(req.username.trim(), ignoreCase = true) }) {
                         call.respond(HttpStatusCode.Conflict, mapOf("error" to "username_taken"))
                         return@post
                     }
-                    val role = if (req!!.role.equals("admin", ignoreCase = true)) WebRole.ADMIN else WebRole.VIEWER
+                    val role = if (req.role.equals("admin", ignoreCase = true)) WebRole.ADMIN else WebRole.VIEWER
                     val user = PasswordHasher.createUser(req.username, req.password, role)
                     scope.launch { appState.mutateSettings { copy(webUsers = webUsers + user) } }.join()
                     AppLog.d("RemoteServer", "creado el usuario '${user.username}' ($role)")
